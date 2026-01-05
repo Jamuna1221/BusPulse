@@ -1,0 +1,30 @@
+name: BusPulse CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  setup-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Verify Node installation
+        run: node -v
+
+      - name: Verify npm installation
+        run: npm -v
+
+      - name: CI sanity check
+        run: echo "CI setup successful for BusPulse"
+ 
