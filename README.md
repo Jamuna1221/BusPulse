@@ -1,11 +1,11 @@
-# 🚌 BusPulse
+#  BusPulse
 
 BusPulse is a smart public bus arrival prediction and information system designed to reduce waiting-time uncertainty for public transport users, especially in regions where GPS-enabled bus tracking is unavailable or limited.
 
 
 ---
 
-## 🎯 Project Objectives
+##  Project Objectives
 
 - Provide reliable bus arrival time estimates using schedule-based logic
 - Support rural and semi-urban public transport systems
@@ -14,7 +14,7 @@ BusPulse is a smart public bus arrival prediction and information system designe
 
 ---
 
-## 🛠 Tech Stack
+##  Tech Stack
 
 - **Frontend**: React.js (Vite)
 - **Backend**: Node.js + Express.js
@@ -25,9 +25,7 @@ BusPulse is a smart public bus arrival prediction and information system designe
 ---
 
 
----
-
-## 🔒 Design Principles
+##  Design Principles
 
 - Loosely coupled frontend and backend
 - No hardcoded configuration values
