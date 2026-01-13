@@ -17,7 +17,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: "18"
 
       - name: Verify Node installation
         run: node -v
@@ -25,6 +25,22 @@ jobs:
       - name: Verify npm installation
         run: npm -v
 
+      # ---------- Frontend ----------
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm install
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm run build
+
+      # ---------- Backend ----------
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          npm install
+
       - name: CI sanity check
         run: echo "CI setup successful for BusPulse"
- 
