@@ -1,13 +1,31 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+
+    <!-- Mobile-first viewport -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+
+    <!-- App Title -->
+    <title>BusPulse</title>
+
+    <!-- App Icon -->
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   </head>
+
   <body>
+    <!-- INITIAL SPLASH LOADER -->
+    <div id="initial-loader">
+      <img src="/logo.png" alt="BusPulse Logo" />
+    </div>
+
+    <!-- React App Root -->
     <div id="root"></div>
+
+    <!-- Vite Entry -->
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

@@ -1,0 +1,55 @@
+{
+  "83A": {
+    "routeId": "83A",
+    "routeName": "Kovilpatti to Tirunelveli",
+    "stops": [
+      {
+        "stopId": "S1",
+        "stopName": "Kovilpatti",
+        "scheduledTime": "05:05"
+      },
+      {
+        "stopId": "S2",
+        "stopName": "Ettayapuram",
+        "scheduledTime": "05:20"
+      },
+      {
+        "stopId": "S3",
+        "stopName": "Vilathikulam",
+        "scheduledTime": "05:40"
+      },
+      {
+        "stopId": "S4",
+        "stopName": "Tirunelveli",
+        "scheduledTime": "06:10"
+      }
+    ]
+  },
+
+  "77B": {
+    "routeId": "77B",
+    "routeName": "Thoothukudi to Madurai",
+    "stops": [
+      {
+        "stopId": "S1",
+        "stopName": "Thoothukudi",
+        "scheduledTime": "06:00"
+      },
+      {
+        "stopId": "S2",
+        "stopName": "Kovilpatti",
+        "scheduledTime": "06:45"
+      },
+      {
+        "stopId": "S3",
+        "stopName": "Virudhunagar",
+        "scheduledTime": "07:30"
+      },
+      {
+        "stopId": "S4",
+        "stopName": "Madurai",
+        "scheduledTime": "08:15"
+      }
+    ]
+  }
+}

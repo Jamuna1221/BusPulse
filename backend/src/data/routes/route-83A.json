@@ -1,0 +1,37 @@
+{
+  "routeId": "83A",
+  "routeName": "Kovilpatti → Tirunelveli",
+  "stops": [
+    {
+      "stopId": "S1",
+      "name": "Kovilpatti",
+      "type": "major",
+      "lat": 9.1712,
+      "lng": 77.8686,
+      "scheduledTime": "05:05"
+    },
+    {
+      "stopId": "S2",
+      "name": "Sattur",
+      "type": "major",
+      "lat": 9.3641,
+      "lng": 77.9275,
+      "scheduledTime": "06:10"
+    },
+    {
+      "stopId": "S2A",
+      "name": "Reddiyapatti",
+      "type": "small",
+      "lat": 9.4202,
+      "lng": 77.9601
+    },
+    {
+      "stopId": "S3",
+      "name": "Virudhunagar",
+      "type": "major",
+      "lat": 9.5851,
+      "lng": 77.9579,
+      "scheduledTime": "07:30"
+    }
+  ]
+}
