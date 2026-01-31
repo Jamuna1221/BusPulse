@@ -1,27 +1,27 @@
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Get the directory name in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load .env from the backend root directory (one level up from src)
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
-import connectDB from "./config/db.js";
-import etaRoutes from "./routes/etaRoutes.js";
-
-dotenv.config();
+import adminAuthRoutes from "./routes/adminAuth.routes.js";
+import userAuthRoutes from "./routes/userAuth.routes.js";
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
-connectDB();
-app.use("/api", etaRoutes);
 
-app.get("/api/health", (req, res) => {
-  res.status(200).json({
-    status: "OK",
-    message: "Backend is running",
-  });
-});
-
+app.use("/auth/admin", adminAuthRoutes);
+app.use("/auth/user", userAuthRoutes);
 const PORT = process.env.PORT || 5000;
-
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🚍 Server running on port ${PORT}`);
 });

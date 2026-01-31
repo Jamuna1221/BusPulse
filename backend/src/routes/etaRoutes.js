@@ -1,8 +1,8 @@
 import express from "express";
-import { getETA } from "../controllers/etaController.js";
+import { getUpcomingBuses } from "../controllers/etaController.js";
 
 const router = express.Router();
 
-router.post("/eta", getETA);
+router.post("/upcoming-buses", getUpcomingBuses);
 
 export default router;
