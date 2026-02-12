@@ -1,58 +1,68 @@
-import { useState } from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-import LocationGate from "./pages/LocationGate";
-import LocationPreview from "./pages/LocationPreview";
-import UpcomingBuses from "./pages/UpcomingBuses.jsx";
-import HomePage from "./pages/HomePage";
+// EXISTING user flow (unchanged)
+import UserFlow from "./pages/UserFlow";
+
+// ADMIN - Authentication
+import AdminLogin from "./pages/admin/AdminLogin";
+import ProtectedRoute from "./components/ProtectedRoute";
+
+// ADMIN - Layout and Pages
+import AdminLayout from "./pages/admin/AdminLayout";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import Users from "./pages/admin/Users";
+import Devices from "./pages/admin/Devices";
+import BusManagement from "./pages/admin/BusManagement";
+import Analytics from "./pages/admin/Analytics";
+import Alerts from "./pages/admin/Alerts";
+import IncidentManagement from "./pages/admin/IncidentManagement";
+import Feedback from "./pages/admin/Feedback"; 
+import Reports from "./pages/admin/Reports";
+import Settings from "./pages/admin/Settings";
+
+// USER AUTH (commented out as per your original)
+//import UserSignup from "./pages/UserSignup";
 
 function App() {
-  const [location, setLocation] = useState(null);
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* ==================== USER ROUTES (Unchanged) ==================== */}
+        {/* User main flow */}
+        <Route path="/" element={<UserFlow />} />
 
-  /**
-   * ask      → ask for location permission
-   * preview  → show detected location
-   * upcoming → show buses in next 15 mins
-   * home     → final/home page (later tracking)
-   */
-  const [step, setStep] = useState("ask");
+        {/* User auth - Uncomment when needed
+        <Route path="/signup" element={<UserSignup />} />
+        */}
 
-  // 1️⃣ Ask for location
-  if (step === "ask") {
-    return (
-      <LocationGate
-        onSuccess={(coords) => {
-          setLocation(coords);
-          setStep("preview");
-        }}
-        onManualLocation={() => setStep("preview")}
-      />
-    );
-  }
+        {/* ==================== ADMIN ROUTES (Protected) ==================== */}
+        
+        {/* Admin Login - Public Route */}
+        <Route path="/admin/login" element={<AdminLogin />} />
 
-  // 2️⃣ Preview detected location
-  if (step === "preview") {
-    return (
-      <LocationPreview
-        location={location}
-        onContinue={() => setStep("upcoming")} // 🔥 CHANGED
-        onChange={() => setStep("ask")}
-      />
-    );
-  }
-
-  // 3️⃣ Upcoming buses page (NEW)
-  if (step === "upcoming") {
-    return (
-      <UpcomingBuses
-        location={location}
-        onSelectBus={() => setStep("home")} // later bus detail
-        onChangeLocation={() => setStep("ask")}
-      />
-    );
-  }
-
-  // 4️⃣ Home / Bus detail page
-  return <HomePage location={location} />;
+        {/* Admin Dashboard - Protected Routes */}
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <AdminLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="users" element={<Users />} />
+          <Route path="devices" element={<Devices />} />
+          <Route path="bus-management" element={<BusManagement />} />
+          <Route path="analytics" element={<Analytics />} />
+          <Route path="alerts" element={<Alerts />} />
+          <Route path="incidents" element={<IncidentManagement />} />
+          <Route path="feedback" element={<Feedback />} />
+          <Route path="reports" element={<Reports />} />
+          <Route path="settings" element={<Settings />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
 export default App;
