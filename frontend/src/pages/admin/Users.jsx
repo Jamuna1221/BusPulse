@@ -7,8 +7,9 @@ import {
   MoreVertical,
   Mail,
   Phone,
-  MapPin,
   Loader,
+  X,
+  ChevronDown,
 } from "lucide-react";
 import { adminUsersAPI } from "../../services/api";
 
@@ -16,6 +17,8 @@ const Users = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [users, setUsers] = useState([]);
   const [activeMenu, setActiveMenu] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const [stats, setStats] = useState({
     total: 0,
     active: 0,
@@ -24,31 +27,12 @@ const Users = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const toggleUserStatus = async (user) => {
-  try {
-    await adminUsersAPI.update(user.id, {
-      is_active: !user.is_active
-    });
 
-    fetchUsers(); // refresh list
-  } catch (err) {
-    console.error("Error updating status:", err);
-  }
-};
-const changeUserRole = async (user) => {
-  const newRole =
-    user.role === "USER" ? "BUS_OPERATOR" : "USER";
-
-  try {
-    await adminUsersAPI.update(user.id, {
-      role: newRole
-    });
-
-    fetchUsers();
-  } catch (err) {
-    console.error("Error updating role:", err);
-  }
-};
+  // Filter states
+  const [filters, setFilters] = useState({
+    role: "",
+    is_active: "",
+  });
 
   const [pagination, setPagination] = useState({
     page: 1,
@@ -57,7 +41,7 @@ const changeUserRole = async (user) => {
     pages: 0,
   });
 
-  // ✅ Fetch users (memoized)
+  // Fetch users
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
@@ -67,6 +51,7 @@ const changeUserRole = async (user) => {
         page: pagination.page,
         limit: pagination.limit,
         search: searchTerm,
+        ...filters,
       });
 
       if (response.success) {
@@ -80,9 +65,9 @@ const changeUserRole = async (user) => {
     } finally {
       setLoading(false);
     }
-  }, [pagination.page, pagination.limit, searchTerm]);
+  }, [pagination.page, pagination.limit, searchTerm, filters]);
 
-  // ✅ Single debounced effect (ESLint-safe)
+  // Debounced fetch
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchUsers();
@@ -91,7 +76,35 @@ const changeUserRole = async (user) => {
     return () => clearTimeout(timer);
   }, [fetchUsers]);
 
-  // ✅ Export users
+  // Toggle user status
+  const toggleUserStatus = async (user) => {
+    try {
+      await adminUsersAPI.update(user.id, {
+        is_active: !user.is_active,
+      });
+      fetchUsers();
+    } catch (err) {
+      console.error("Error updating status:", err);
+      alert("Failed to update user status");
+    }
+  };
+
+  // Change user role
+  const changeUserRole = async (user) => {
+    const newRole = user.role === "USER" ? "BUS_OPERATOR" : "USER";
+
+    try {
+      await adminUsersAPI.update(user.id, {
+        role: newRole,
+      });
+      fetchUsers();
+    } catch (err) {
+      console.error("Error updating role:", err);
+      alert("Failed to update user role");
+    }
+  };
+
+  // Export users
   const handleExport = async () => {
     try {
       const response = await adminUsersAPI.export();
@@ -112,7 +125,7 @@ const changeUserRole = async (user) => {
       "Email",
       "Phone",
       "Role",
-      "Status",
+      "Active",
       "Location",
       "Join Date",
     ];
@@ -123,7 +136,7 @@ const changeUserRole = async (user) => {
       u.email,
       u.phone || "",
       u.role,
-      u.status,
+      u.is_active ? "Yes" : "No",
       u.location || "",
       new Date(u.joinDate).toLocaleDateString(),
     ]);
@@ -141,6 +154,19 @@ const changeUserRole = async (user) => {
     URL.revokeObjectURL(url);
   };
 
+  // Apply filters
+  const applyFilters = () => {
+    setPagination((p) => ({ ...p, page: 1 }));
+    setShowFilters(false);
+  };
+
+  // Clear filters
+  const clearFilters = () => {
+    setFilters({ role: "", is_active: "" });
+    setPagination((p) => ({ ...p, page: 1 }));
+    setShowFilters(false);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -151,7 +177,10 @@ const changeUserRole = async (user) => {
             Manage and monitor all platform users
           </p>
         </div>
-        <button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg">
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
+        >
           <UserPlus size={20} />
           Add User
         </button>
@@ -169,7 +198,10 @@ const changeUserRole = async (user) => {
       <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              size={20}
+            />
             <input
               value={searchTerm}
               onChange={(e) => {
@@ -177,19 +209,81 @@ const changeUserRole = async (user) => {
                 setPagination((p) => ({ ...p, page: 1 }));
               }}
               placeholder="Search users by name or email..."
-              className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
+              className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
             />
           </div>
-          <button className="px-6 py-3 bg-slate-700 rounded-lg text-white flex items-center gap-2">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-white flex items-center gap-2 transition-colors"
+          >
             <Filter size={20} /> Filters
+            {(filters.role || filters.is_active) && (
+              <span className="ml-2 px-2 py-0.5 bg-blue-600 rounded-full text-xs">
+                {Object.values(filters).filter(Boolean).length}
+              </span>
+            )}
           </button>
           <button
             onClick={handleExport}
-            className="px-6 py-3 bg-slate-700 rounded-lg text-white flex items-center gap-2"
+            disabled={users.length === 0}
+            className="px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-white flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download size={20} /> Export
           </button>
         </div>
+
+        {/* Filters Panel */}
+        {showFilters && (
+          <div className="mt-4 p-4 bg-slate-700 rounded-lg border border-slate-600">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-300 mb-2">Role</label>
+                <select
+                  value={filters.role}
+                  onChange={(e) =>
+                    setFilters((f) => ({ ...f, role: e.target.value }))
+                  }
+                  className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">All Roles</option>
+                  <option value="USER">User</option>
+                  <option value="BUS_OPERATOR">Bus Operator</option>
+                  <option value="ADMIN">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-300 mb-2">
+                  Status
+                </label>
+                <select
+                  value={filters.is_active}
+                  onChange={(e) =>
+                    setFilters((f) => ({ ...f, is_active: e.target.value }))
+                  }
+                  className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">All Status</option>
+                  <option value="true">Active</option>
+                  <option value="false">Inactive</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={applyFilters}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              >
+                Apply Filters
+              </button>
+              <button
+                onClick={clearFilters}
+                className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Error */}
@@ -208,123 +302,171 @@ const changeUserRole = async (user) => {
       ) : (
         <>
           {/* Table */}
-          <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-slate-700/50">
-                <tr>
-                  {["User", "Contact", "Role", "Status", "Last Active", "Actions"].map(
-                    (h) => (
+          <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-visible">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-slate-700/50">
+                  <tr>
+                    {[
+                      "User",
+                      "Contact",
+                      "Role",
+                      "Status",
+                      "Last Active",
+                      "Actions",
+                    ].map((h) => (
                       <th
                         key={h}
-                        className="px-6 py-4 text-left text-sm text-gray-300"
+                        className="px-6 py-4 text-left text-sm font-medium text-gray-300"
                       >
                         {h}
                       </th>
-                    )
-                  )}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-700">
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700">
                 {users.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="text-center py-12 text-gray-400">
+                    <td
+                      colSpan="6"
+                      className="text-center py-12 text-gray-400"
+                    >
                       No users found
                     </td>
                   </tr>
                 ) : (
                   users.map((u) => (
                     <tr key={u.id} className="hover:bg-slate-700/30">
-                      <td className="px-6 py-4 text-white">{u.name}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold">
+                            {u.name.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="text-white font-medium">
+                            {u.name}
+                          </span>
+                        </div>
+                      </td>
                       <td className="px-6 py-4 text-gray-300">
                         <div className="flex flex-col gap-1">
-                          <span className="flex items-center gap-2">
+                          <span className="flex items-center gap-2 text-sm">
                             <Mail size={14} /> {u.email}
                           </span>
-                          <span className="flex items-center gap-2">
+                          <span className="flex items-center gap-2 text-sm">
                             <Phone size={14} /> {u.phone || "N/A"}
                           </span>
                         </div>
                       </td>
-                      <td className="px-6 py-4">{u.role}</td>
                       <td className="px-6 py-4">
-  <span
-    className={`px-3 py-1 rounded-full text-sm ${
-      u.is_active
-        ? "bg-green-500/20 text-green-400"
-        : "bg-red-500/20 text-red-400"
-    }`}
-  >
-    {u.is_active ? "Active" : "Inactive"}
-  </span>
-</td>
-
+                        <span className="px-3 py-1 bg-slate-700 text-gray-300 rounded-lg text-sm">
+                          {u.role}
+                        </span>
+                      </td>
                       <td className="px-6 py-4">
+                        <span
+                          className={`px-3 py-1 rounded-full text-sm font-medium ${
+                            u.is_active
+                              ? "bg-green-500/20 text-green-400"
+                              : "bg-red-500/20 text-red-400"
+                          }`}
+                        >
+                          {u.is_active ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-gray-300 text-sm">
                         {u.lastActive
                           ? new Date(u.lastActive).toLocaleDateString()
                           : "N/A"}
                       </td>
-                      <td className="px-6 py-4 relative">
-  <button
-    onClick={() =>
-      setActiveMenu(activeMenu === u.id ? null : u.id)
-    }
-    className="text-gray-400 hover:text-white"
-  >
-    <MoreVertical size={18} />
-  </button>
+                      <td className="px-6 py-4">
+                        <div className="relative">
+                          <button
+                            onClick={() =>
+                              setActiveMenu(activeMenu === u.id ? null : u.id)
+                            }
+                            className="text-gray-400 hover:text-white transition-colors"
+                          >
+                            <MoreVertical size={18} />
+                          </button>
 
-  {activeMenu === u.id && (
-    <div className="absolute right-6 mt-2 w-40 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-50">
-      
-      {/* View */}
-      <button
-        onClick={() => {
-          console.log("View user", u.id);
-          setActiveMenu(null);
-        }}
-        className="block w-full text-left px-4 py-2 text-sm hover:bg-slate-700 text-gray-300"
-      >
-        View
-      </button>
+                          {activeMenu === u.id && (
+                            <>
+                              {/* Backdrop - closes menu when clicking outside */}
+                              <div
+                                className="fixed inset-0 z-40"
+                                onClick={() => setActiveMenu(null)}
+                              />
+                              
+                              {/* Dropdown Menu - positioned absolutely with high z-index */}
+                              <div className="absolute right-0 top-8 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50">
+                                <button
+                                  onClick={() => {
+                                    console.log("View user", u.id);
+                                    setActiveMenu(null);
+                                  }}
+                                  className="block w-full text-left px-4 py-2.5 text-sm hover:bg-slate-700 text-gray-300 transition-colors rounded-t-lg"
+                                >
+                                  View Details
+                                </button>
 
-      {/* Activate / Deactivate */}
-      <button
-        onClick={() => {
-          toggleUserStatus(u);
-          setActiveMenu(null);
-        }}
-        className="block w-full text-left px-4 py-2 text-sm hover:bg-slate-700 text-gray-300"
-      >
-        {u.is_active ? "Deactivate" : "Activate"}
-      </button>
+                                <button
+                                  onClick={() => {
+                                    toggleUserStatus(u);
+                                    setActiveMenu(null);
+                                  }}
+                                  className="block w-full text-left px-4 py-2.5 text-sm hover:bg-slate-700 text-gray-300 transition-colors"
+                                >
+                                  {u.is_active ? "Deactivate" : "Activate"}
+                                </button>
 
-      {/* Change Role */}
-      <button
-        onClick={() => {
-          changeUserRole(u);
-          setActiveMenu(null);
-        }}
-        className="block w-full text-left px-4 py-2 text-sm hover:bg-slate-700 text-gray-300"
-      >
-        Change Role
-      </button>
+                                <button
+                                  onClick={() => {
+                                    changeUserRole(u);
+                                    setActiveMenu(null);
+                                  }}
+                                  className="block w-full text-left px-4 py-2.5 text-sm hover:bg-slate-700 text-gray-300 transition-colors"
+                                >
+                                  Change to{" "}
+                                  {u.role === "USER"
+                                    ? "Bus Operator"
+                                    : "User"}
+                                </button>
 
-    </div>
-  )}
-</td>
-
+                                <button
+                                  onClick={() => {
+                                    if (
+                                      confirm(
+                                        `Delete user ${u.name}? This cannot be undone.`
+                                      )
+                                    ) {
+                                      // TODO: Implement delete
+                                      console.log("Delete user", u.id);
+                                    }
+                                    setActiveMenu(null);
+                                  }}
+                                  className="block w-full text-left px-4 py-2.5 text-sm hover:bg-slate-700 text-red-400 transition-colors border-t border-slate-700 rounded-b-lg"
+                                >
+                                  Delete User
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
+            </div>
           </div>
 
           {/* Pagination */}
           {pagination.pages > 1 && (
-            <div className="flex justify-between items-center bg-slate-800 p-4 rounded-xl">
+            <div className="flex justify-between items-center bg-slate-800 p-4 rounded-xl border border-slate-700">
               <span className="text-gray-400 text-sm">
-                Page {pagination.page} of {pagination.pages}
+                Page {pagination.page} of {pagination.pages} ({pagination.total}{" "}
+                total users)
               </span>
               <div className="flex gap-2">
                 <button
@@ -332,7 +474,7 @@ const changeUserRole = async (user) => {
                   onClick={() =>
                     setPagination((p) => ({ ...p, page: p.page - 1 }))
                   }
-                  className="px-4 py-2 bg-slate-700 text-white rounded-lg"
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   Previous
                 </button>
@@ -341,7 +483,7 @@ const changeUserRole = async (user) => {
                   onClick={() =>
                     setPagination((p) => ({ ...p, page: p.page + 1 }))
                   }
-                  className="px-4 py-2 bg-slate-700 text-white rounded-lg"
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   Next
                 </button>
@@ -350,17 +492,185 @@ const changeUserRole = async (user) => {
           )}
         </>
       )}
+
+      {/* Add User Modal */}
+      {showAddModal && (
+        <AddUserModal
+          onClose={() => setShowAddModal(false)}
+          onSuccess={fetchUsers}
+        />
+      )}
     </div>
   );
 };
 
 const StatCard = ({ title, value }) => (
-  <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
+  <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 hover:border-slate-600 transition-colors">
     <p className="text-gray-400 text-sm">{title}</p>
     <p className="text-3xl font-bold text-white mt-2">
       {value?.toLocaleString() || 0}
     </p>
   </div>
 );
+
+const AddUserModal = ({ onClose, onSuccess }) => {
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    password: "",
+    role: "USER",
+    location: "",
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await adminUsersAPI.create(formData);
+      if (response.success) {
+        onSuccess();
+        onClose();
+      }
+    } catch (err) {
+      console.error("Error creating user:", err);
+      setError(err.message || "Failed to create user");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-xl border border-slate-700 max-w-md w-full p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-white">Add New User</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-white transition-colors"
+          >
+            <X size={24} />
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+            <p className="text-red-400 text-sm">{error}</p>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm text-gray-300 mb-2">
+              Name <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={formData.name}
+              onChange={(e) =>
+                setFormData((f) => ({ ...f, name: e.target.value }))
+              }
+              className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-300 mb-2">
+              Email <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="email"
+              required
+              value={formData.email}
+              onChange={(e) =>
+                setFormData((f) => ({ ...f, email: e.target.value }))
+              }
+              className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-300 mb-2">Phone</label>
+            <input
+              type="tel"
+              value={formData.phone}
+              onChange={(e) =>
+                setFormData((f) => ({ ...f, phone: e.target.value }))
+              }
+              className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-300 mb-2">
+              Password <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="password"
+              required
+              minLength={6}
+              value={formData.password}
+              onChange={(e) =>
+                setFormData((f) => ({ ...f, password: e.target.value }))
+              }
+              className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-300 mb-2">Role</label>
+            <select
+              value={formData.role}
+              onChange={(e) =>
+                setFormData((f) => ({ ...f, role: e.target.value }))
+              }
+              className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+            >
+              <option value="USER">User</option>
+              <option value="BUS_OPERATOR">Bus Operator</option>
+              <option value="ADMIN">Admin</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-300 mb-2">
+              Location
+            </label>
+            <input
+              type="text"
+              value={formData.location}
+              onChange={(e) =>
+                setFormData((f) => ({ ...f, location: e.target.value }))
+              }
+              className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div className="flex gap-3 mt-6">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? "Creating..." : "Create User"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
 
 export default Users;

@@ -1,321 +1,207 @@
-import pool from "../config/db.js";
+import userService from "../services/user.service.js";
 
-// Get all users with pagination and filters
+/**
+ * Admin Users Controller
+ * Handles HTTP requests and delegates business logic to service layer
+ */
+
+/**
+ * Get all users with pagination and filters
+ * GET /api/admin/users
+ */
 export const getAllUsers = async (req, res) => {
   try {
-    const { 
-      page = 1, 
-      limit = 10, 
-      search = '', 
-      role = '', 
-      is_active = '' 
-    } = req.query;
+    const { page, limit, search, role, is_active } = req.query;
 
-    const offset = (page - 1) * limit;
-
-    // Build the WHERE clause dynamically
-    let whereConditions = [];
-    let queryParams = [];
-    let paramIndex = 1;
-
-    if (search) {
-      whereConditions.push(`(name ILIKE $${paramIndex} OR email ILIKE $${paramIndex})`);
-      queryParams.push(`%${search}%`);
-      paramIndex++;
-    }
-
-    if (role) {
-      whereConditions.push(`role = $${paramIndex}`);
-      queryParams.push(role);
-      paramIndex++;
-    }
-
-    if (is_active) {
-      whereConditions.push(`is_active = $${paramIndex}`);
-      queryParams.push(is_active === 'active');
-      paramIndex++;
-    }
-
-    const whereClause = whereConditions.length > 0 
-      ? `WHERE ${whereConditions.join(' AND ')}` 
-      : '';
-
-    // Get total count
-    const countQuery = `
-      SELECT COUNT(*) 
-      FROM users 
-      ${whereClause}
-    `;
-    const countResult = await pool.query(countQuery, queryParams);
-    const totalUsers = parseInt(countResult.rows[0].count);
-
-    // Get users with pagination
-    queryParams.push(limit, offset);
-    const usersQuery = `
-      SELECT 
-        id,
-        name,
-        email,
-        phone,
-        role,
-        CASE 
-        WHEN is_active = true THEN 'active'
-        ELSE 'inactive'
-        END AS status,
-        location,
-        created_at as "joinDate",
-        updated_at as "lastActive"
-      FROM users
-      ${whereClause}
-      ORDER BY created_at DESC
-      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-    `;
-
-    const usersResult = await pool.query(usersQuery, queryParams);
-
-    // Get statistics
-    const statsQuery = `
-      SELECT 
-        COUNT(*) as total,
-        COUNT(*) FILTER (WHERE is_active = true) as active,
-        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as new_this_week,
-        COUNT(*) FILTER (WHERE role = 'bus_operator') as bus_operators
-      FROM users
-    `;
-    const statsResult = await pool.query(statsQuery);
+    // Get users and stats in parallel
+    const [usersData, stats] = await Promise.all([
+      userService.getUsers({ page, limit, search, role, is_active }),
+      userService.getStats(),
+    ]);
 
     res.json({
       success: true,
       data: {
-        users: usersResult.rows,
-        pagination: {
-          total: totalUsers,
-          page: parseInt(page),
-          limit: parseInt(limit),
-          pages: Math.ceil(totalUsers / limit)
-        },
-        stats: statsResult.rows[0]
-      }
+        users: usersData.users,
+        pagination: usersData.pagination,
+        stats,
+      },
     });
   } catch (error) {
-    console.error('Error fetching users:', error);
+    console.error("Error in getAllUsers:", error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching users',
-      error: error.message
+      message: "Error fetching users",
+      error: error.message,
     });
   }
 };
 
-// Get single user by ID
+/**
+ * Get single user by ID
+ * GET /api/admin/users/:id
+ */
 export const getUserById = async (req, res) => {
   try {
     const { id } = req.params;
-
-    const query = `
-      SELECT 
-        id,
-        name,
-        email,
-        phone,
-        role,
-        CASE 
-        WHEN is_active = true THEN 'active'
-        ELSE 'inactive'
-        END AS status,
-        location,
-        created_at as "joinDate",
-        updated_at as "lastActive"
-      FROM users
-      WHERE id = $1
-    `;
-
-    const result = await pool.query(query, [id]);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
+    const user = await userService.getUserById(id);
 
     res.json({
       success: true,
-      data: result.rows[0]
+      data: user,
     });
   } catch (error) {
-    console.error('Error fetching user:', error);
+    console.error("Error in getUserById:", error);
+    
+    if (error.message === "User not found") {
+      return res.status(404).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
     res.status(500).json({
       success: false,
-      message: 'Error fetching user',
-      error: error.message
+      message: "Error fetching user",
+      error: error.message,
     });
   }
 };
 
-// Create new user
+/**
+ * Create new user
+ * POST /api/admin/users
+ */
 export const createUser = async (req, res) => {
   try {
-    const { name, email, phone, password, role, location } = req.body;
+    const userData = req.body;
 
-    // Check if user already exists
-    const checkQuery = 'SELECT id FROM users WHERE email = $1';
-    const checkResult = await pool.query(checkQuery, [email]);
-
-    if (checkResult.rows.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'User with this email already exists'
-      });
+    // Validate required fields
+    const requiredFields = ["name", "email", "password"];
+    for (const field of requiredFields) {
+      if (!userData[field]) {
+        return res.status(400).json({
+          success: false,
+          message: `${field} is required`,
+        });
+      }
     }
 
-    // Hash password (you should use bcrypt in production)
-    const bcrypt = await import('bcryptjs');
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const insertQuery = `
-      INSERT INTO users (name, email, phone, password, role, location, is_active)
-      VALUES ($1, $2, $3, $4, $5, $6, true)
-      RETURNING id, name, email, phone, role, is_active, location, created_at
-    `;
-
-    const result = await pool.query(insertQuery, [
-      name,
-      email,
-      phone,
-      hashedPassword,
-      role || 'commuter',
-      location
-    ]);
+    const newUser = await userService.createUser(userData);
 
     res.status(201).json({
       success: true,
-      message: 'User created successfully',
-      data: result.rows[0]
+      message: "User created successfully",
+      data: newUser,
     });
   } catch (error) {
-    console.error('Error creating user:', error);
+    console.error("Error in createUser:", error);
+
+    if (error.message === "User with this email already exists") {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
     res.status(500).json({
       success: false,
-      message: 'Error creating user',
-      error: error.message
+      message: "Error creating user",
+      error: error.message,
     });
   }
 };
 
-// Update user
+/**
+ * Update user
+ * PUT /api/admin/users/:id
+ */
 export const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, phone, role, status, location } = req.body;
+    const updates = req.body;
 
-    const updateQuery = `
-      UPDATE users
-      SET 
-        name = COALESCE($1, name),
-        email = COALESCE($2, email),
-        phone = COALESCE($3, phone),
-        role = COALESCE($4, role),
-        is_active = COALESCE($5, status),
-        location = COALESCE($6, location),
-        updated_at = NOW()
-      WHERE id = $7
-      RETURNING id, name, email, phone, role, status, location, updated_at
-    `;
-
-    const result = await pool.query(updateQuery, [
-      name,
-      email,
-      phone,
-      role,
-      is_active,
-      location,
-      id
-    ]);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
+    const updatedUser = await userService.updateUser(id, updates);
 
     res.json({
       success: true,
-      message: 'User updated successfully',
-      data: result.rows[0]
+      message: "User updated successfully",
+      data: updatedUser,
     });
   } catch (error) {
-    console.error('Error updating user:', error);
+    console.error("Error in updateUser:", error);
+
+    if (error.message === "User not found") {
+      return res.status(404).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    if (error.message === "No valid fields to update") {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
     res.status(500).json({
       success: false,
-      message: 'Error updating user',
-      error: error.message
+      message: "Error updating user",
+      error: error.message,
     });
   }
 };
 
-// Delete user
+/**
+ * Delete user
+ * DELETE /api/admin/users/:id
+ */
 export const deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
-
-    const deleteQuery = 'DELETE FROM users WHERE id = $1 RETURNING id';
-    const result = await pool.query(deleteQuery, [id]);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
+    await userService.deleteUser(id);
 
     res.json({
       success: true,
-      message: 'User deleted successfully'
+      message: "User deleted successfully",
     });
   } catch (error) {
-    console.error('Error deleting user:', error);
+    console.error("Error in deleteUser:", error);
+
+    if (error.message === "User not found") {
+      return res.status(404).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
     res.status(500).json({
       success: false,
-      message: 'Error deleting user',
-      error: error.message
+      message: "Error deleting user",
+      error: error.message,
     });
   }
 };
 
-// Export user data
+/**
+ * Export users data
+ * GET /api/admin/users/export
+ */
 export const exportUsers = async (req, res) => {
   try {
-    const query = `
-      SELECT 
-        id,
-        name,
-        email,
-        phone,
-        role,
-        CASE 
-        WHEN is_active = true THEN 'active'
-        ELSE 'inactive'
-        END AS status,
-        location,
-        created_at as "joinDate"
-      FROM users
-      ORDER BY created_at DESC
-    `;
-
-    const result = await pool.query(query);
+    const users = await userService.exportUsers();
 
     res.json({
       success: true,
-      data: result.rows
+      data: users,
     });
   } catch (error) {
-    console.error('Error exporting users:', error);
+    console.error("Error in exportUsers:", error);
     res.status(500).json({
       success: false,
-      message: 'Error exporting users',
-      error: error.message
+      message: "Error exporting users",
+      error: error.message,
     });
   }
 };
