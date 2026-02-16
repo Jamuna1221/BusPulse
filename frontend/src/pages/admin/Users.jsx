@@ -11,7 +11,7 @@ import {
   X,
   ChevronDown,
 } from "lucide-react";
-import { adminUsersAPI } from "../../services/api";
+import { adminUsersAPI } from "../../config/api";
 
 const Users = () => {
   const [searchTerm, setSearchTerm] = useState("");

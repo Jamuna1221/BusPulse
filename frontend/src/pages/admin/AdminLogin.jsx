@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { adminAuthAPI } from "../../services/api";
+import { adminAuthAPI } from "../../config/api";
 import Logo from "../../assets/Logo.svg";
 
 export default function AdminLogin() {

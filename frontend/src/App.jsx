@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-// EXISTING user flow (unchanged)
+// user flow
 import UserFlow from "./pages/UserFlow";
 
 // ADMIN - Authentication
