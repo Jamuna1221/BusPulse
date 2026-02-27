@@ -18,4 +18,5 @@ BusPulse is a smart public bus arrival prediction and information system designe
 
 - **Frontend**: React.js (Vite)
 - **Backend**: Node.js + Express.js
-- **Database**: MongoDB
+- **Database**: PostgreSQL
+  
