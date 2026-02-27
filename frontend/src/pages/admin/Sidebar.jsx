@@ -19,6 +19,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   const navItems = [
     { path: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/admin/users', icon: Users, label: 'Users' },
+    { path: '/admin/schedulers', icon: BarChart3, label: 'Scheduler' },
     { path: '/admin/devices', icon: Smartphone, label: 'Devices' },
     { path: '/admin/bus-management', icon: Bus, label: 'Bus Management' },
     { path: '/admin/analytics', icon: BarChart3, label: 'Analytics' },

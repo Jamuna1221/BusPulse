@@ -10,12 +10,15 @@ dotenv.config({ path: path.resolve(__dirname, "../.env") });
 // ================== IMPORTS ==================
 import express from "express";
 import cors from "cors";
-
+import busRoutes from "./routes/bus.routes.js";
 import adminAuthRoutes from "./routes/adminAuth.routes.js";
 import userAuthRoutes from "./routes/userAuth.routes.js";
+import { verifyEmail } from "./controllers/auth.controller.js";
 import adminUsersRoutes from "./routes/Adminusers.routes.js";
-import busRoutes from "./routes/busRoutes.js";
+import busRoutess from "./routes/busRoutes.js";
 import placesRoutes from "./routes/places.routes.js";
+import busSchedulerRoutes from './routes/busScheduler.routes.js';
+import schedulerAuthRoutes from './routes/schedulerAuth.routes.js';
 import { config } from "./config/config.js";
 
 // ================== APP INIT ==================
@@ -39,12 +42,14 @@ if (config.server.nodeEnv === "development") {
 // Auth Routes
 app.use("/auth/admin", adminAuthRoutes);
 app.use("/auth/user", userAuthRoutes);
+app.use("/auth/scheduler", schedulerAuthRoutes);
+app.get("/auth/verify-email", verifyEmail);
 
 // Admin Routes
 app.use("/api/admin/users", adminUsersRoutes);
-
+app.use('/api/admin/schedulers', busSchedulerRoutes);
 // Bus Upcoming Feature
-app.use("/api/buses", busRoutes);
+app.use("/api/buses", busRoutess);
 app.use("/api/places", placesRoutes);
 // Root Endpoint
 app.get("/", (req, res) => {
@@ -59,7 +64,7 @@ app.get("/", (req, res) => {
     },
   });
 });
-
+app.use("/api/scheduler/buses", busRoutes);
 // ================== ERROR HANDLING ==================
 
 // Global error handler
