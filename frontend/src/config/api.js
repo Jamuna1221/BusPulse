@@ -179,6 +179,42 @@ export const schedulerBusAPI = {
       method: "DELETE",
     }),
 };
+// ================== SCHEDULER ROUTE API ==================
+// Add this block to src/config/api.js after schedulerBusAPI
+
+export const schedulerRouteAPI = {
+  // GET /api/scheduler/routes?search=Madurai&isActive=true
+  getAll: (params = {}) => {
+    const clean = Object.fromEntries(
+      Object.entries(params).filter(([, v]) => v !== "" && v != null)
+    );
+    const queryString = new URLSearchParams(clean).toString();
+    return apiCall(`/api/scheduler/routes${queryString ? `?${queryString}` : ""}`);
+  },
+
+  // GET /api/scheduler/routes/:id
+  getById: (id) => apiCall(`/api/scheduler/routes/${id}`),
+
+  // POST /api/scheduler/routes
+  create: (data) =>
+    apiCall("/api/scheduler/routes", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  // PUT /api/scheduler/routes/:id
+  update: (id, data) =>
+    apiCall(`/api/scheduler/routes/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  // DELETE /api/scheduler/routes/:id  (soft delete — marks is_active=false)
+  delete: (id) =>
+    apiCall(`/api/scheduler/routes/${id}`, {
+      method: "DELETE",
+    }),
+};
 // ================== BUS API ==================
 export const busAPI = {
   getUpcoming: (payload) =>
@@ -203,6 +239,7 @@ export default {
   adminAuthAPI,
   schedulerAuthAPI,
   schedulerBusAPI,
+  schedulerRouteAPI,
   busAPI,
   placesAPI,
 };

@@ -20,7 +20,7 @@ import placesRoutes from "./routes/places.routes.js";
 import busSchedulerRoutes from './routes/busScheduler.routes.js';
 import schedulerAuthRoutes from './routes/schedulerAuth.routes.js';
 import { config } from "./config/config.js";
-
+import schedulerRouteRoutes from "./routes/schedulerRoute.routes.js";
 // ================== APP INIT ==================
 const app = express();
 
@@ -65,6 +65,7 @@ app.get("/", (req, res) => {
   });
 });
 app.use("/api/scheduler/buses", busRoutes);
+app.use("/api/scheduler/routes", schedulerRouteRoutes);
 // ================== ERROR HANDLING ==================
 
 // Global error handler
