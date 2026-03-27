@@ -21,7 +21,6 @@ const SchedulerSidebar = ({ isOpen, onClose }) => {
     { path: "/scheduler/buses", icon: Bus, label: "Bus Management" },
     { path: "/scheduler/routes", icon: Map, label: "Route Management" },
     { path: "/scheduler/schedules", icon: CalendarDays, label: "Schedules" },
-    { path: "/scheduler/drivers", icon: Users, label: "Drivers" },
     { path: "/scheduler/reports", icon: BarChart3, label: "Reports & Analytics" },
     { path: "/scheduler/notifications", icon: Bell, label: "Notifications" },
     { path: "/scheduler/activity", icon: ClipboardList, label: "Activity Logs" },

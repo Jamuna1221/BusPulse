@@ -1,41 +1,44 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import LocationGate from "./LocationGate";
 import LocationPreview from "./LocationPreview";
 import UpcomingBuses from "./UpcomingBuses";
 import HomePage from "./HomePage";
 import ManualLocation from "./ManualLocation";
 
-const DEFAULT_LOCATION = {
-  lat: 9.1464,
-  lng: 77.8325,
-};
+// Fallback center — Kovilpatti area (Tamil Nadu)
+const DEFAULT_LOCATION = { lat: 9.1464, lng: 77.8325 };
 
 function UserFlow() {
-  const [location, setLocation] = useState(null);
-  const [step, setStep] = useState("ask");
+  const [location,    setLocation]    = useState(null);
+  const [step,        setStep]        = useState("ask");
+  const [gpsLocation, setGpsLocation] = useState(null); // best GPS we could get
+
+  // Try to silently get GPS in background as soon as app loads
+  // This way, even if user chooses "Set manually", map starts at their real position
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setGpsLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {}, // silent fail — user might deny later via LocationGate
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  }, []);
 
   const handleLocationSuccess = (coords) => {
-    if (coords) {
-      setLocation(coords);
-    } else {
-      // Continue without location
-      setLocation(DEFAULT_LOCATION);
-    }
+    const loc = coords || gpsLocation || DEFAULT_LOCATION;
+    setLocation(loc);
+    if (coords) setGpsLocation(coords); // update GPS record too
     setStep("preview");
   };
 
-  const handleManualLocation = () => {
-    setStep("manual");
-  };
+  const handleManualLocation = () => setStep("manual");
 
   const handleManualSubmit = (coords) => {
     setLocation(coords);
     setStep("preview");
   };
 
-  const handlePreviewContinue = () => {
-    setStep("upcoming");
-  };
+  const handlePreviewContinue = () => setStep("upcoming");
 
   const handleChangeLocation = () => {
     setLocation(null);
@@ -56,6 +59,8 @@ function UserFlow() {
       <ManualLocation
         onSubmit={handleManualSubmit}
         onCancel={() => setStep("ask")}
+        // Pass GPS location so the map can center on user's real position
+        gpsLocation={gpsLocation || DEFAULT_LOCATION}
       />
     );
   }

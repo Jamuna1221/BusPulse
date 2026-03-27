@@ -5,6 +5,7 @@ import {
   updateRouteService,
   deleteRouteService,
 } from "../services/schedulerRouteService.js";
+import { insertLog } from "../repositories/activityLogs.repository.js";
 
 /**
  * Scheduler Route Controller
@@ -64,6 +65,13 @@ export const createRoute = async (req, res) => {
     const createdBy = req.user.id;
     const route = await createRouteService(req.body, createdBy);
 
+    await insertLog({
+      schedulerId: req.user.id,
+      action: "Route Created",
+      details: `Created route ${route.route_no} (${route.from_place} → ${route.to_place}).`,
+      type: "create",
+    });
+
     res.status(201).json({
       success: true,
       message: "Route created successfully",
@@ -100,6 +108,13 @@ export const updateRoute = async (req, res) => {
   try {
     const updated = await updateRouteService(Number(req.params.id), req.body);
 
+    await insertLog({
+      schedulerId: req.user.id,
+      action: "Route Updated",
+      details: `Updated route ${updated.route_no} (ID: ${req.params.id}).`,
+      type: "update",
+    });
+
     res.json({
       success: true,
       message: "Route updated successfully",
@@ -135,6 +150,13 @@ export const updateRoute = async (req, res) => {
 export const deleteRoute = async (req, res) => {
   try {
     const result = await deleteRouteService(Number(req.params.id));
+
+    await insertLog({
+      schedulerId: req.user.id,
+      action: "Route Deactivated",
+      details: `Deactivated route ${result.route_no} (ID: ${req.params.id}).`,
+      type: "delete",
+    });
 
     res.json({
       success: true,

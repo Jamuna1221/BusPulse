@@ -1,122 +1,103 @@
-import { getRoutesNearLocation } from "../repositories/routeRepository.js";
 import { getUpcomingServices } from "../repositories/serviceRepository.js";
 import { isUserNearRoute } from "./routeMatcher.js";
 import { calculateETAsForServices } from "./etaService.js";
 import { config } from "../config/config.js";
 
-/**
- * Get current time in HH:MM format
- * @returns {string}
- */
+// Only show buses arriving within this many minutes
+const MAX_ETA_TO_SHOW = 30;
+
 function getCurrentTime() {
   const now = new Date();
-  const hours = String(now.getHours()).padStart(2, "0");
-  const minutes = String(now.getMinutes()).padStart(2, "0");
-  return `${hours}:${minutes}`;
+  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 }
 
 /**
- * Main service to get upcoming buses near user location
- * @param {Object} userLocation - {lat, lng}
- * @param {number} maxMinutes - Maximum minutes to look ahead (default from config)
- * @returns {Promise<Array>}
+ * Main service — get upcoming buses near user location.
+ *
+ * Pipeline:
+ * 1. Fetch services: departed up to 3hrs ago (en-route) + departing in next 60min
+ * 2. Filter: route must pass within 2km of user
+ * 3. Calculate realistic ETA (18km/h + stop time)
+ * 4. Filter: only show buses arriving within 30 minutes ← key filter
+ * 5. Sort by ETA ascending
  */
 export async function getUpcomingBusesNearUser(
   userLocation,
-  maxMinutes = config.eta.maxMinutes
+  maxMinutes = 60
 ) {
   const { lat, lng } = userLocation;
+  const currentTime  = getCurrentTime();
 
-  // Get current time
-  const currentTime = getCurrentTime();
-
-  // Step 1: Get upcoming services within time window
+  // Step 1: Fetch — wide window to catch en-route buses
   const upcomingServices = await getUpcomingServices(currentTime, maxMinutes);
 
-  // Step 2: Filter services where route passes near user
+  // Step 2: Filter — route must pass near user (2km threshold)
   const nearbyServices = upcomingServices.filter((service) => {
-    if (!service.route_geometry || service.route_geometry.length === 0) {
-      return false;
-    }
-
+    if (!service.route_geometry || service.route_geometry.length === 0) return false;
     return isUserNearRoute(lat, lng, service.route_geometry);
   });
 
-  // Step 3: Calculate ETAs for nearby services
-  const servicesWithETA = calculateETAsForServices(
-    nearbyServices,
-    userLocation,
-    currentTime
+  // Step 3: Calculate realistic ETAs
+  const servicesWithETA = calculateETAsForServices(nearbyServices, userLocation, currentTime);
+
+  // Step 4: Filter — only buses arriving within 30 minutes
+  // This removes buses like 114 min, 359 min etc that are on the route
+  // but nowhere near arriving at user's location soon
+  const relevantBuses = servicesWithETA.filter(
+    (service) => service.etaMinutes <= MAX_ETA_TO_SHOW
   );
 
-  // Step 4: Format response
-  return servicesWithETA.map((service) => ({
-    serviceId: service.service_id,
-    routeId: service.route_id,
-    routeNo: service.route_no,
-    from: service.from_place,
-    to: service.to_place,
+  // Step 5: Format — include routeGeometry for Track modal
+  return relevantBuses.map((service) => ({
+    serviceId:     service.service_id,
+    routeId:       service.route_id,
+    routeNo:       service.route_no,
+    from:          service.from_place,
+    to:            service.to_place,
     departureTime: service.departure_time,
-    eta: service.etaMinutes,
-    distance: service.distance,
-    status: service.status,
-    confidence: service.confidence,
+    eta:           service.etaMinutes,
+    distance:      service.distance,
+    status:        service.status,
+    confidence:    service.confidence,
+    routeGeometry: service.route_geometry,
   }));
 }
 
-/**
- * Get upcoming buses with more detailed information
- * @param {Object} params - {lat, lng, maxMinutes, includeRouteGeometry}
- * @returns {Promise<Object>}
- */
 export async function getUpcomingBusesDetailed(params) {
   const {
     lat,
     lng,
-    maxMinutes = config.eta.maxMinutes,
+    maxMinutes = 60,
     includeRouteGeometry = false,
   } = params;
 
   const buses = await getUpcomingBusesNearUser({ lat, lng }, maxMinutes);
 
-  const response = {
+  return {
     userLocation: { lat, lng },
-    currentTime: getCurrentTime(),
+    currentTime:  getCurrentTime(),
     maxMinutes,
     count: buses.length,
     buses: buses.map((bus) => {
       const result = { ...bus };
-
-      // Optionally remove route geometry to reduce payload size
-      if (!includeRouteGeometry) {
-        delete result.route_geometry;
-      }
-
+      if (!includeRouteGeometry) delete result.routeGeometry;
       return result;
     }),
   };
-
-  return response;
 }
 
-/**
- * Get buses grouped by status
- * @param {Object} userLocation - {lat, lng}
- * @returns {Promise<Object>}
- */
 export async function getUpcomingBusesGroupedByStatus(userLocation) {
   const buses = await getUpcomingBusesNearUser(userLocation);
-
-  const grouped = {
-    nearby: buses.filter((b) => b.status === "NEARBY"),
-    approaching: buses.filter((b) => b.status === "APPROACHING"),
-    enRoute: buses.filter((b) => b.status === "EN_ROUTE"),
-  };
 
   return {
     userLocation,
     currentTime: getCurrentTime(),
     total: buses.length,
-    grouped,
+    grouped: {
+      nearby:      buses.filter((b) => b.status === "NEARBY"),
+      approaching: buses.filter((b) => b.status === "APPROACHING"),
+      enRoute:     buses.filter((b) => b.status === "EN_ROUTE"),
+      notDeparted: buses.filter((b) => b.status === "NOT_DEPARTED"),
+    },
   };
 }
