@@ -51,7 +51,7 @@ export default function UserDashboardLayout() {
         {/* Top bar */}
         <div style={s.topbar}>
           <span style={s.topbarTitle}>Dashboard</span>
-          <button onClick={() => navigate("/")} style={s.findBusBtn}>🚌 Find Buses</button>
+          <button onClick={() => navigate("/home")} style={s.findBusBtn}>🚌 Find Buses</button>
         </div>
         <div style={s.content}>
           <Outlet />

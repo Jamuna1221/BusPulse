@@ -6,6 +6,9 @@ import { UserAuthProvider } from "./context/UserAuthContext";
 import UserProtectedRoute from "./components/UserProtectedRoute";
 import UserLogin from "./pages/UserLogin";
 
+// Landing Page
+import LandingPage from "./pages/LandingPage";
+
 // User flow
 import UserFlow from "./pages/UserFlow";
 
@@ -58,12 +61,15 @@ function App() {
     <UserAuthProvider>
       <BrowserRouter>
         <Routes>
+          {/* ==================== PUBLIC LANDING ==================== */}
+          <Route path="/" element={<LandingPage />} />
+
           {/* ==================== USER AUTH ==================== */}
           <Route path="/user/login" element={<UserLogin />} />
 
           {/* ==================== USER ROUTES (Protected) ==================== */}
           <Route
-            path="/"
+            path="/home"
             element={
               <UserProtectedRoute>
                 <UserFlow />
@@ -82,9 +88,9 @@ function App() {
           >
             <Route index element={<Navigate to="overview" replace />} />
             <Route path="overview" element={<UserOverview />} />
-            <Route path="places"   element={<UserSavedPlaces />} />
+            <Route path="places" element={<UserSavedPlaces />} />
             <Route path="activity" element={<UserActivity />} />
-            <Route path="profile"  element={<UserProfile />} />
+            <Route path="profile" element={<UserProfile />} />
           </Route>
 
           {/* ==================== SCHEDULER ROUTES ==================== */}
@@ -141,6 +147,5 @@ function App() {
     ? <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>{content}</GoogleOAuthProvider>
     : content;
 }
-
 
 export default App;

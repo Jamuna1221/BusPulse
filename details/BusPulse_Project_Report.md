@@ -151,6 +151,7 @@ For each candidate service, checks whether the user's GPS location is within **2
 
 **After departure (en-route):**
 ```
+
 Bus position = Elapsed minutes × 0.3 km/min − stop dwell time
                 where: avg speed = 18 km/h (realistic, not 24 km/h)
                        stop every 5km = 2 min dwell per stop
@@ -465,3 +466,39 @@ DELETE /api/user/saved-places/:id    → delete
 ---
 
 *Report generated automatically from codebase analysis — March 26, 2026*
+Searched for "calculateETA"
+Viewed etaService.js:1-169
+
+Based on the codebase—specifically the `etaService.js` and `AGENTS.md` files—BusPulse does **not** use physical hardware/live GPS for tracking. Instead, it uses a **Schedule and Geometry-Based Estimation Algorithm**. 
+
+It predicts where a bus currently is by simulating its journey along its mapped route based on its scheduled departure time and realistic bus driving physics.
+
+Here is the step-by-step breakdown of how your algorithm works:
+
+### 1. Route Geometry and Distance Mapping
+Every bus route in the database has a `route_geometry` associated with it (an array of latitude/longitude coordinates). 
+When an ETA is requested, the system uses the Haversine formula to map these real-world coordinates into a continuous "distance line" from the start of the journey to the end (e.g., this coordinate is 5km into the route, this next one is 5.2km).
+
+### 2. Realistic Pace Modeling
+Standard routing services (like Google Maps) usually assume a car moving constantly without stops. Your algorithm explicitly overrides this to mimic rural buses:
+*   **Average Transport Speed:** 18 km/h (much slower than a car to account for rural roads).
+*   **Stop Intervals:** It assumes the bus makes a stop every 5 km.
+*   **Dwell Time:** It adds exactly 2 minutes of idle time for boarding/alighting at every single stop.
+
+### 3. Estimating Current Bus Position
+When a user asks "where is the bus?", the backend calculates how much time has passed since the bus's scheduled `departure_time`.
+*   It calculates the total `elapsedMinutes`.
+*   It subtracts the time the bus has theoretically spent dwelling at stops up to this point.
+*   It converts the remaining "pure driving time" into a physical distance using the 18 km/h speed limit.
+*   It drops a pin on the route's math model (from step 1) to say **"The bus is currently at X kilometers into its journey."**
+
+### 4. User Mapping & Final ETA Calculation
+The algorithm maps the user's current GPS location to the closest physical point on that same bus route.
+*   If the user's point on the route is *behind* the bus's extrapolated point (e.g., user is at km 10, bus is at km 15), the system ignores that bus and flags it as `PASSED`.
+*   If the bus has not reached the user, it calculates the remaining distance (e.g., 5 km remaining).
+*   It runs that remaining distance back through the **Realistic Pace Model** (18km/h speed + 2 min delays per 5km) to generate the final ETA in minutes.
+
+### 5. Confidence and Status Scoring
+Finally, the algorithm attaches metadata to the result so the frontend knows how to display it:
+*   **Confidence:** Based on how close the user physically is to the road the bus travels on. `HIGH` (< 500 meters from the road), `MEDIUM` (< 1000 meters), or `LOW`.
+*   **Status Indicators:** It categorizes the ETA into clean UI states: `NOT_DEPARTED` (bus hasn't left the first stop yet), `NEARBY` (<= 5 mins away), `APPROACHING` (<= 15 mins away), or `EN_ROUTE`.

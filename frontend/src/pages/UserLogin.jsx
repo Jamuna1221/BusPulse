@@ -38,7 +38,7 @@ export default function UserLogin() {
     setLoading(true);
     try {
       await loginEmail(email, password);
-      navigate("/");
+      navigate("/home");
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
   };
@@ -64,7 +64,7 @@ export default function UserLogin() {
     setLoading(true);
     try {
       await verifySignup(email, otp);
-      navigate("/");
+      navigate("/home");
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
   };
@@ -72,7 +72,7 @@ export default function UserLogin() {
   // ── GOOGLE ──
   const handleGoogle = async (cr) => {
     clearMessages(); setLoading(true);
-    try { await loginGoogle(cr.credential); navigate("/"); }
+    try { await loginGoogle(cr.credential); navigate("/home"); }
     catch (err) { setError(err.message); }
     finally { setLoading(false); }
   };

@@ -310,7 +310,7 @@ export const verifySignupOtpService = async (email, otp) => {
 // ================== USER GOOGLE AUTH ==================
 
 export const googleAuthUserService = async (googleToken) => {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
   if (!clientId) throw Object.assign(new Error('GOOGLE_CLIENT_ID is not configured on the server.'), { status: 500 });
 
   const client = new OAuth2Client(clientId);
