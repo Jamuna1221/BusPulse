@@ -42,6 +42,17 @@ function parseCSV(filePath) {
 }
 
 /**
+ * Haversine fallback — used when OSRM omits distance (public demo server quirk)
+ */
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return parseFloat((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))).toFixed(2));
+}
+
+/**
  * Get route geometry from OSRM
  */
 async function getRouteGeometry(fromLat, fromLng, toLat, toLng) {
@@ -61,8 +72,11 @@ async function getRouteGeometry(fromLat, fromLng, toLat, toLng) {
       lng: Number(lng.toFixed(6))
     }));
 
-    // Get distance in km
-    const distanceKm = (data.routes[0].distance / 1000).toFixed(2);
+    // Guard: OSRM public demo server sometimes returns undefined distance
+    const rawDist    = data.routes[0].distance;
+    const distanceKm = (rawDist != null && !isNaN(rawDist))
+      ? parseFloat((rawDist / 1000).toFixed(2))
+      : haversineKm(fromLat, fromLng, toLat, toLng); // straight-line fallback
 
     return { geometry, distanceKm };
   } catch (error) {

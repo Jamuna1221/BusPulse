@@ -3,7 +3,8 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 // ================== TOKEN HANDLING ==================
-const getToken = () => localStorage.getItem("token");
+const getToken = () =>
+  localStorage.getItem("token") || localStorage.getItem("user_token");
 
 const getHeaders = (customHeaders = {}) => {
   const token = getToken();
@@ -231,6 +232,15 @@ export const busAPI = {
 
   healthCheck: () => apiCall("/api/buses/health"),
 };
+
+export const busFeedbackAPI = {
+  submit: (payload) =>
+    apiCall("/api/user/bus-feedback", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  getStatus: (serviceId) => apiCall(`/api/user/bus-status/${serviceId}`),
+};
 // ================== SCHEDULER SERVICES API ==================
 // Add this to src/config/api.js
 
@@ -343,6 +353,7 @@ export default {
   schedulerRouteAPI,
   schedulerServicesAPI,
   busAPI,
+  busFeedbackAPI,
   placesAPI,
   schedulerActivityAPI,
 };

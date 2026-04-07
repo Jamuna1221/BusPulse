@@ -12,6 +12,16 @@ import {
 export async function getUpcomingBuses(req, res) {
   try {
     const { lat, lng, maxMinutes, grouped, detailed } = req.body;
+    const destination =
+      typeof req.body.destinationLat === "number" &&
+      typeof req.body.destinationLng === "number"
+        ? {
+            lat: req.body.destinationLat,
+            lng: req.body.destinationLng,
+            name: req.body.destinationName || null,
+            id: req.body.destinationId || null,
+          }
+        : null;
 
     // Validate required fields
     if (!lat || !lng) {
@@ -40,18 +50,19 @@ export async function getUpcomingBuses(req, res) {
 
     if (grouped) {
       // Return buses grouped by status
-      result = await getUpcomingBusesGroupedByStatus({ lat, lng });
+      result = await getUpcomingBusesGroupedByStatus({ lat, lng, destination });
     } else if (detailed) {
       // Return detailed information
       result = await getUpcomingBusesDetailed({
         lat,
         lng,
         maxMinutes,
+        destination,
         includeRouteGeometry: req.body.includeRouteGeometry || false,
       });
     } else {
       // Return simple list
-      const buses = await getUpcomingBusesNearUser({ lat, lng }, maxMinutes);
+      const buses = await getUpcomingBusesNearUser({ lat, lng }, maxMinutes, destination);
       result = {
         success: true,
         count: buses.length,

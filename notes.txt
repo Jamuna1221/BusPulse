@@ -1,0 +1,6 @@
+openbuildings donwload
+
+Geocoding: "Tirunelveli Junction"...
+✅ Geocoded "Tirunelveli Junction": 8.7312234, 77.708336
+🗺️  Fetching OSRM geometry for route 482...
+❌ OSRM error for route 482: null value in column "distance_km" of relation "route_geometry" violates not-null constraint   do this also , and crt the thing like if i add new route it hase ot run succexfully

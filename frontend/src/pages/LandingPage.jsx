@@ -881,9 +881,7 @@ export default function LandingPage() {
             <button onClick={() => navigate("/user/login")} style={s.ctaBtn} className="cta-pill">
               Get Started for Free →
             </button>
-            <button onClick={() => navigate("/admin/login")} style={s.secondaryBtn} className="sec-pill">
-              Admin Portal
-            </button>
+
           </div>
         </div>
       </section>

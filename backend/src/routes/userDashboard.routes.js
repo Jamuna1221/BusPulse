@@ -6,6 +6,7 @@ import {
   updateSavedPlace,
   deleteSavedPlace,
   getActivity,
+  logActivity,
   getUserProfile,
   updateUserProfile,
 } from '../controllers/userDashboard.controller.js';
@@ -24,5 +25,6 @@ router.put('/saved-places/:id', updateSavedPlace);
 router.delete('/saved-places/:id', deleteSavedPlace);
 
 router.get('/activity', getActivity);
+router.post('/activity/log', logActivity);
 
 export default router;

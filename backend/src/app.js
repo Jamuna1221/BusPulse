@@ -35,9 +35,12 @@ import schedulerServiceRoutes from "./routes/schedulerService.routes.js";
 // Activity Logs
 import activityLogsRoutes from "./routes/activityLogs.routes.js";
 import { createActivityLogsTable } from "./repositories/activityLogs.repository.js";
+import { createUserDashboardTables } from "./repositories/userDashboard.repository.js";
+import { createBusFeedbackTables } from "./repositories/busFeedback.repository.js";
 
 // User Dashboard
 import userDashboardRoutes from "./routes/userDashboard.routes.js";
+import busFeedbackRoutes from "./routes/busFeedback.routes.js";
 
 
 // Config
@@ -63,6 +66,18 @@ createActivityLogsTable()
   .then(() => console.log("✅ activity_logs table ready"))
   .catch((e) =>
     console.error("❌ Failed to create activity_logs table:", e.message)
+  );
+
+createUserDashboardTables()
+  .then(() => console.log("✅ user dashboard tables ready"))
+  .catch((e) =>
+    console.error("❌ Failed to create user dashboard tables:", e.message)
+  );
+
+createBusFeedbackTables()
+  .then(() => console.log("✅ bus feedback tables ready"))
+  .catch((e) =>
+    console.error("❌ Failed to create bus feedback tables:", e.message)
   );
 
 // ================== ROUTES ==================
@@ -95,6 +110,7 @@ app.use("/api/scheduler/activity-logs", activityLogsRoutes);
 
 // -------- USER DASHBOARD --------
 app.use("/api/user", userDashboardRoutes);
+app.use("/api/user", busFeedbackRoutes);
 
 // -------- ROOT --------
 app.get("/", (req, res) => {

@@ -26,6 +26,15 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD,
 });
 
+// ── Haversine fallback (when OSRM omits distance) ────────────
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return parseFloat((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))).toFixed(2));
+}
+
 // ── OSRM fetch ────────────────────────────────────────────────
 async function getRouteGeometry(fromLat, fromLng, toLat, toLng) {
   const url = `https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson`;
@@ -39,7 +48,11 @@ async function getRouteGeometry(fromLat, fromLng, toLat, toLng) {
     lng: Number(lng.toFixed(6)),
   }));
 
-  const distanceKm = parseFloat((data.routes[0].distance / 1000).toFixed(2));
+  // Guard: OSRM can return undefined/null distance on the public demo server
+  const rawDist    = data.routes[0].distance;
+  const distanceKm = (rawDist != null && !isNaN(rawDist))
+    ? parseFloat((rawDist / 1000).toFixed(2))
+    : haversineKm(fromLat, fromLng, toLat, toLng); // straight-line fallback
 
   return { geometry, distanceKm };
 }

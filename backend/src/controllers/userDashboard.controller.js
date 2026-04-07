@@ -4,6 +4,7 @@ import {
   updateSavedPlaceService,
   deleteSavedPlaceService,
   getActivityService,
+  logSearchService,
 } from '../services/userDashboard.service.js';
 import pool from '../config/db.js';
 
@@ -44,6 +45,14 @@ export const getActivity = async (req, res) => {
   try {
     const activity = await getActivityService(req.user.id);
     res.json({ success: true, data: activity });
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+};
+
+// POST /api/user/activity/log
+export const logActivity = async (req, res) => {
+  try {
+    await logSearchService(req.user.id, req.body || {});
+    res.status(201).json({ success: true });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 };
 
