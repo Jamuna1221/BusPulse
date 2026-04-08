@@ -131,7 +131,9 @@ export async function getUpcomingBusesNearUser(
       : service.etaMinutes;
 
     const effectiveStatus =
-      live?.status === "SERVICE_DISRUPTED" ? "SERVICE_DISRUPTED" : service.status;
+      live?.status === "SERVICE_DISRUPTED" || live?.status === "LIKELY_DELAYED" || live?.status === "CONFIRMED_DELAY"
+        ? live.status
+        : service.status;
 
     return {
     serviceId:     service.service_id,
@@ -146,6 +148,8 @@ export async function getUpcomingBusesNearUser(
     confidence:    service.confidence,
     routeGeometry: service.route_geometry,
     liveStatus: live?.status || null,
+    statusNote: live?.status_note || null,
+    schedulerVerified: Boolean(live?.scheduler_verified),
     delayMinutes: live?.delay_minutes != null ? Number(live.delay_minutes) : 0,
     crowdLevel: live?.crowd_level || null,
     confidenceScore:

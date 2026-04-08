@@ -317,6 +317,34 @@ export const schedulerActivityAPI = {
   },
 };
 
+export const schedulerNotificationsAPI = {
+  getAll: (params = {}) => {
+    const clean = Object.fromEntries(
+      Object.entries(params).filter(([, v]) => v !== "" && v != null)
+    );
+    const qs = new URLSearchParams(clean).toString();
+    return apiCall(`/api/scheduler/notifications${qs ? `?${qs}` : ""}`);
+  },
+  confirmIncident: (incidentId) =>
+    apiCall(`/api/scheduler/notifications/incident/${incidentId}/confirm`, {
+      method: "POST",
+    }),
+  resolveIncident: (incidentId) =>
+    apiCall(`/api/scheduler/notifications/incident/${incidentId}/resolve`, {
+      method: "POST",
+    }),
+  confirmDelay: (serviceId, delayMinutes = 20) =>
+    apiCall(`/api/scheduler/notifications/delay/${serviceId}/confirm`, {
+      method: "POST",
+      body: JSON.stringify({ delayMinutes }),
+    }),
+};
+
+export const schedulerAnalyticsAPI = {
+  getOverview: () => apiCall("/api/scheduler/analytics/overview"),
+  getDashboard: () => apiCall("/api/scheduler/analytics/dashboard"),
+};
+
 // ================== USER AUTH API ==================
 export const userAuthAPI = {
   sendOtp: (email, name) =>
@@ -356,4 +384,6 @@ export default {
   busFeedbackAPI,
   placesAPI,
   schedulerActivityAPI,
+  schedulerNotificationsAPI,
+  schedulerAnalyticsAPI,
 };

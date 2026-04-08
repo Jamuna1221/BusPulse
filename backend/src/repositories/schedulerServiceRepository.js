@@ -78,11 +78,25 @@ export async function getServiceById(id) {
        r.route_no,
        r.distance_km,
        fp.name AS from_place,
-       tp.name AS to_place
+       tp.name AS to_place,
+       fp.lat AS from_lat,
+       fp.lng AS from_lng,
+       tp.lat AS to_lat,
+       tp.lng AS to_lng,
+       rg.geometry AS route_geometry,
+       bls.status AS live_status,
+       bls.delay_minutes,
+       bls.crowd_level,
+       bls.confidence_score,
+       bls.status_note,
+       bls.scheduler_verified,
+       bls.last_updated
      FROM public.services s
      JOIN public.routes r  ON s.route_id      = r.id
      JOIN public.places fp ON r.from_place_id = fp.id
      JOIN public.places tp ON r.to_place_id   = tp.id
+     LEFT JOIN public.route_geometry rg ON rg.route_id = r.id
+     LEFT JOIN public.bus_live_status bls ON bls.service_id = s.id
      WHERE s.id = $1`,
     [id]
   );

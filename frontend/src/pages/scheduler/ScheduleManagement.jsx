@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Plus, Edit2, Trash2, X, Search, ChevronDown, ChevronRight,
-  Clock, RefreshCw, AlertCircle, Zap, AlertTriangle,
+  Clock, RefreshCw, AlertCircle, Zap, AlertTriangle, Navigation,
 } from "lucide-react";
 import { schedulerServicesAPI } from "../../config/api.js";
 
@@ -11,6 +11,140 @@ const MODE = {
   EDIT_DEPARTURE: "EDIT_DEPARTURE",
   ADD_ROUTE:      "ADD_ROUTE",
 };
+
+function timeToMinutes(t) {
+  const [h, m] = String(t).slice(0, 5).split(":").map(Number);
+  return h * 60 + m;
+}
+
+function getCurrentTimeStr() {
+  const n = new Date();
+  return `${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
+}
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const r = (d) => d * Math.PI / 180;
+  const dLat = r(lat2 - lat1);
+  const dLng = r(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(r(lat1)) * Math.cos(r(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function estimateBusPosition(bus) {
+  const geo = bus.route_geometry || [];
+  if (!geo.length) return null;
+  const cur = timeToMinutes(getCurrentTimeStr());
+  const dep = timeToMinutes(bus.departure_time);
+  const elapsed = cur - dep;
+  if (elapsed <= 0) return geo[0];
+  const avgKmPerMin = 18 / 60;
+  const dist = Math.max(0, elapsed) * avgKmPerMin;
+  let acc = 0;
+  for (let i = 1; i < geo.length; i++) {
+    const seg = haversineKm(geo[i - 1].lat, geo[i - 1].lng, geo[i].lat, geo[i].lng);
+    if (acc + seg >= dist) {
+      const f = seg > 0 ? (dist - acc) / seg : 0;
+      return {
+        lat: geo[i - 1].lat + f * (geo[i].lat - geo[i - 1].lat),
+        lng: geo[i - 1].lng + f * (geo[i].lng - geo[i - 1].lng),
+      };
+    }
+    acc += seg;
+  }
+  return geo[geo.length - 1];
+}
+
+function SchedulerTrackMap({ bus }) {
+  const [ready, setReady] = useState(false);
+  const mapRef = useState(() => ({ current: null }))[0];
+  const mapInst = useState(() => ({ current: null }))[0];
+  const busMarker = useState(() => ({ current: null }))[0];
+
+  useEffect(() => {
+    if (!document.getElementById("leaflet-css-scheduler")) {
+      const l = document.createElement("link");
+      l.id = "leaflet-css-scheduler";
+      l.rel = "stylesheet";
+      l.href = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
+      document.head.appendChild(l);
+    }
+    const init = () => {
+      const L = window.L;
+      if (!L || !mapRef.current || mapInst.current) return;
+      const geo = bus.route_geometry || [];
+      const busPos = estimateBusPosition(bus) || geo[0];
+      if (!busPos) return;
+      mapInst.current = L.map(mapRef.current, { zoomControl: true }).setView([busPos.lat, busPos.lng], 11);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap", maxZoom: 18 }).addTo(mapInst.current);
+      if (geo.length > 1) {
+        L.polyline(geo.map((p) => [p.lat, p.lng]), { color: "#059669", weight: 4, opacity: 0.85 }).addTo(mapInst.current);
+        L.circleMarker([geo[0].lat, geo[0].lng], { radius: 6, color: "#059669", fillColor: "#059669", fillOpacity: 1 }).addTo(mapInst.current).bindPopup(`<b>From:</b> ${bus.from_place}`);
+        const last = geo[geo.length - 1];
+        L.circleMarker([last.lat, last.lng], { radius: 6, color: "#dc2626", fillColor: "#dc2626", fillOpacity: 1 }).addTo(mapInst.current).bindPopup(`<b>To:</b> ${bus.to_place}`);
+      }
+      const busIcon = L.divIcon({ html: `<div style="background:#f59e0b;width:28px;height:28px;border-radius:50%;border:3px solid white;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 10px rgba(0,0,0,0.25)">🚌</div>`, iconSize: [28, 28], iconAnchor: [14, 14], className: "" });
+      busMarker.current = L.marker([busPos.lat, busPos.lng], { icon: busIcon }).addTo(mapInst.current).bindPopup(`<b>${bus.route_no}</b><br>${bus.from_place} → ${bus.to_place}`);
+      setReady(true);
+    };
+    if (window.L) init();
+    else {
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+      s.onload = init;
+      document.body.appendChild(s);
+    }
+    const iv = setInterval(() => {
+      const pos = estimateBusPosition(bus);
+      if (pos && busMarker.current) busMarker.current.setLatLng([pos.lat, pos.lng]);
+    }, 10000);
+    return () => {
+      clearInterval(iv);
+      if (mapInst.current) {
+        mapInst.current.remove();
+        mapInst.current = null;
+      }
+    };
+  }, [bus.service_id]);
+
+  return (
+    <div className="w-full h-[320px] rounded-xl border border-slate-700 overflow-hidden bg-slate-900">
+      {!ready && <div className="h-full flex items-center justify-center text-sm text-gray-500">Loading map...</div>}
+      <div ref={(el) => (mapRef.current = el)} className="w-full h-full" />
+    </div>
+  );
+}
+
+function SchedulerTrackModal({ bus, onClose }) {
+  const cur = timeToMinutes(getCurrentTimeStr());
+  const dep = timeToMinutes(bus.departure_time);
+  const elapsed = cur - dep;
+  const liveStatus = bus.live_status ? String(bus.live_status).replaceAll("_", " ") : "No live status";
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4" onClick={onClose}>
+      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-3xl p-5 max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h3 className="text-xl font-bold text-white">{bus.route_no} · Live Track</h3>
+            <p className="text-sm text-gray-400 mt-0.5">{bus.from_place} → {bus.to_place}</p>
+            <p className="text-xs text-gray-500 mt-1">
+              {elapsed < 0 ? `Departs in ${Math.abs(elapsed)} min` : `Departed ${elapsed} min ago`} · Status: {liveStatus}
+            </p>
+            {bus.status_note && <p className="text-xs text-amber-300 mt-1">{bus.status_note}</p>}
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={20} /></button>
+        </div>
+        {Array.isArray(bus.route_geometry) && bus.route_geometry.length > 0 ? (
+          <SchedulerTrackMap bus={bus} />
+        ) : (
+          <div className="h-[240px] rounded-xl border border-slate-700 bg-slate-900 flex items-center justify-center text-gray-500 text-sm">
+            No route geometry available for this service.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const ScheduleManagement = () => {
   const [grouped,   setGrouped]   = useState([]);
@@ -27,15 +161,35 @@ const ScheduleManagement = () => {
   const [saving,         setSaving]        = useState(false);
   const [formError,      setFormError]     = useState(null);
   const [saveResult,     setSaveResult]    = useState(null);
-  const [nextHourFilter, setNextHourFilter]= useState(false); // filter by next hour departures
+  const [timeFilter, setTimeFilter] = useState("NONE"); // NONE | NEXT_HOUR | ACTIVE_NOW
+  const [trackingBus, setTrackingBus] = useState(null);
+  const [trackLoading, setTrackLoading] = useState(false);
 
-  // Get current time window HH:MM for filtering next-hour departures on the frontend
-  const getNextHourWindow = () => {
-    const now = new Date();
-    const from = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
-    const next = new Date(now.getTime() + 60 * 60 * 1000);
-    const to   = `${String(next.getHours()).padStart(2,"0")}:${String(next.getMinutes()).padStart(2,"0")}`;
-    return { from, to };
+  // Time helpers for robust filtering (handles midnight wrap too)
+  const toMinutes = (hhmm) => {
+    if (!hhmm) return null;
+    const normalized = String(hhmm).slice(0, 5);
+    const [h, m] = normalized.split(":").map(Number);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+    return h * 60 + m;
+  };
+  const nowMinutes = () => {
+    const n = new Date();
+    return n.getHours() * 60 + n.getMinutes();
+  };
+  const isDepartureInNextHour = (departureTime) => {
+    const dep = toMinutes(departureTime);
+    if (dep == null) return false;
+    const now = nowMinutes();
+    const futureDiff = (dep - now + 1440) % 1440;
+    return futureDiff >= 0 && futureDiff <= 60;
+  };
+  const isDepartureActiveNow = (departureTime) => {
+    const dep = toMinutes(departureTime);
+    if (dep == null) return false;
+    const now = nowMinutes();
+    const pastDiff = (now - dep + 1440) % 1440;
+    return pastDiff >= 0 && pastDiff <= 60;
   };
 
   const fetchData = useCallback(async () => {
@@ -65,18 +219,27 @@ const ScheduleManagement = () => {
   }, [fetchData]);
 
 
-  // Filter grouped routes to only show departures in the next hour
-  const displayedGrouped = nextHourFilter
-    ? (() => {
-        const { from, to } = getNextHourWindow();
-        return grouped
-          .map(route => ({
-            ...route,
-            departures: route.departures.filter(d => d.departure_time >= from && d.departure_time <= to),
-          }))
-          .filter(route => route.departures.length > 0);
-      })()
-    : grouped;
+  const nextHourDeparturesCount = grouped.reduce(
+    (acc, route) => acc + route.departures.filter((d) => isDepartureInNextHour(d.departure_time)).length,
+    0
+  );
+  const activeNowDeparturesCount = grouped.reduce(
+    (acc, route) => acc + route.departures.filter((d) => isDepartureActiveNow(d.departure_time)).length,
+    0
+  );
+
+  // Filter grouped routes by selected time filter
+  const displayedGrouped = (() => {
+    if (timeFilter === "NONE") return grouped;
+    const matcher =
+      timeFilter === "NEXT_HOUR" ? isDepartureInNextHour : isDepartureActiveNow;
+    return grouped
+      .map((route) => ({
+        ...route,
+        departures: route.departures.filter((d) => matcher(d.departure_time)),
+      }))
+      .filter((route) => route.departures.length > 0);
+  })();
 
   const toggleExpand = (id) => setExpanded(prev => {
     const next = new Set(prev);
@@ -125,6 +288,18 @@ const ScheduleManagement = () => {
     }
   };
 
+  const openTrack = async (svc) => {
+    try {
+      setTrackLoading(true);
+      const res = await schedulerServicesAPI.getById(svc.service_id);
+      setTrackingBus(res.data);
+    } catch (err) {
+      alert(err.message || "Failed to load tracking details.");
+    } finally {
+      setTrackLoading(false);
+    }
+  };
+
   const totalDepartures = displayedGrouped.reduce((a, r) => a + r.departures.length, 0);
 
   return (
@@ -145,25 +320,28 @@ const ScheduleManagement = () => {
       {stats && (
         <div className="grid grid-cols-3 gap-4">
           {[
-            { label: "Total Services",    value: stats.total_services,      color: "text-blue-400",   clickable: false },
-            { label: "Active Routes",     value: stats.total_routes,        color: "text-green-400",  clickable: false },
-            { label: "Next Hour Departs", value: stats.departing_next_hour, color: "text-yellow-400", clickable: true },
+            { label: "Total Services",    value: stats.total_services,       color: "text-blue-400",   filter: null },
+            { label: "Active Routes",     value: stats.total_routes,         color: "text-green-400",  filter: null },
+            { label: "Next Hour Departs", value: nextHourDeparturesCount,    color: "text-yellow-400", filter: "NEXT_HOUR" },
+            { label: "Active Running Now", value: activeNowDeparturesCount,  color: "text-cyan-400",   filter: "ACTIVE_NOW" },
           ].map(s => (
             <div
               key={s.label}
-              onClick={() => s.clickable && setNextHourFilter(prev => !prev)}
+              onClick={() =>
+                s.filter && setTimeFilter((prev) => (prev === s.filter ? "NONE" : s.filter))
+              }
               className={`bg-slate-800 border rounded-xl p-4 transition-all ${
-                s.clickable
-                  ? "border-slate-700 cursor-pointer hover:border-yellow-400/50 hover:bg-slate-700/60 active:scale-95"
+                s.filter
+                  ? "border-slate-700 cursor-pointer hover:border-cyan-400/50 hover:bg-slate-700/60 active:scale-95"
                   : "border-slate-700"
-              } ${s.clickable && nextHourFilter ? "border-yellow-400 ring-1 ring-yellow-400/30" : ""}`}
+              } ${s.filter && timeFilter === s.filter ? "border-cyan-400 ring-1 ring-cyan-400/30" : ""}`}
             >
               <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
               <div className="flex items-center gap-1 mt-0.5">
                 <p className="text-xs text-gray-400">{s.label}</p>
-                {s.clickable && (
-                  <span className="text-xs text-yellow-400/60">
-                    {nextHourFilter ? "· click to clear" : "· click to filter"}
+                {s.filter && (
+                  <span className="text-xs text-cyan-400/60">
+                    {timeFilter === s.filter ? "· click to clear" : "· click to filter"}
                   </span>
                 )}
               </div>
@@ -207,11 +385,16 @@ const ScheduleManagement = () => {
       )}
 
       {/* Next hour filter active banner */}
-      {nextHourFilter && (
-        <div className="flex items-center gap-2 bg-yellow-500/10 border border-yellow-400/30 text-yellow-400 px-4 py-2.5 rounded-lg text-sm">
+      {timeFilter !== "NONE" && (
+        <div className="flex items-center gap-2 bg-cyan-500/10 border border-cyan-400/30 text-cyan-300 px-4 py-2.5 rounded-lg text-sm">
           <Clock size={16} />
-          <span>Showing departures in the <strong>next 60 minutes</strong> only — {displayedGrouped.reduce((a,r) => a + r.departures.length, 0)} departure(s) across {displayedGrouped.length} route(s)</span>
-          <button onClick={() => setNextHourFilter(false)} className="ml-auto text-xs underline hover:text-yellow-300">Clear filter</button>
+          <span>
+            {timeFilter === "NEXT_HOUR"
+              ? <>Showing departures in the <strong>next 60 minutes</strong> only</>
+              : <>Showing buses that are likely <strong>running now</strong> (departed within last 60 minutes)</>}
+            {" "}— {displayedGrouped.reduce((a, r) => a + r.departures.length, 0)} departure(s) across {displayedGrouped.length} route(s)
+          </span>
+          <button onClick={() => setTimeFilter("NONE")} className="ml-auto text-xs underline hover:text-cyan-200">Clear filter</button>
         </div>
       )}
 
@@ -255,6 +438,15 @@ const ScheduleManagement = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 ml-3 shrink-0" onClick={e => e.stopPropagation()}>
+                    {route.departures.length > 0 && (
+                      <button
+                        onClick={() => openTrack(route.departures[0])}
+                        className="flex items-center gap-1 text-xs text-cyan-300 hover:bg-cyan-400/10 px-2 py-1 rounded-lg transition-colors"
+                        title="Track first running departure on this route"
+                      >
+                        <Navigation size={12} /> Track
+                      </button>
+                    )}
                     <button onClick={() => openAddDeparture(route)} className="flex items-center gap-1 text-xs text-green-400 hover:bg-green-400/10 px-2 py-1 rounded-lg transition-colors">
                       <Plus size={12} /> Time
                     </button>
@@ -277,7 +469,14 @@ const ScheduleManagement = () => {
                         <div key={dep.service_id} className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-2 group transition-colors">
                           <Clock size={12} className="text-gray-400" />
                           <span className="text-white text-sm font-mono">{dep.departure_time}</span>
-                          <div className="flex gap-0.5 ml-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex gap-1 ml-1">
+                            <button
+                              onClick={() => openTrack(dep)}
+                              className="px-1.5 py-0.5 text-[10px] text-cyan-300 border border-cyan-400/40 rounded hover:bg-cyan-400/10"
+                              title="Live track this departure"
+                            >
+                              Track
+                            </button>
                             <button onClick={() => openEditDeparture(dep, route)} className="p-0.5 text-gray-400 hover:text-blue-400" title="Edit">
                               <Edit2 size={11} />
                             </button>
@@ -442,6 +641,14 @@ const ScheduleManagement = () => {
             )}
           </div>
         </div>
+      )}
+      {trackLoading && (
+        <div className="fixed bottom-4 right-4 bg-slate-800 border border-slate-700 text-gray-200 px-3 py-2 rounded-lg text-sm">
+          Loading live track...
+        </div>
+      )}
+      {trackingBus && (
+        <SchedulerTrackModal bus={trackingBus} onClose={() => setTrackingBus(null)} />
       )}
     </div>
   );

@@ -165,7 +165,10 @@ function formatEta(m) {
 }
 function liveStatusLabel(s) { return s ? s.replaceAll("_", " ") : null; }
 function effectiveStatus(bus) {
-  return bus?.liveStatus === "SERVICE_DISRUPTED" ? "SERVICE_DISRUPTED" : bus?.status;
+  if (bus?.liveStatus === "SERVICE_DISRUPTED") return "SERVICE_DISRUPTED";
+  if (bus?.liveStatus === "LIKELY_DELAYED") return "LIKELY_DELAYED";
+  if (bus?.liveStatus === "CONFIRMED_DELAY") return "CONFIRMED_DELAY";
+  return bus?.status;
 }
 
 async function searchDestinationPlaces(query) {
@@ -295,6 +298,14 @@ function TrackModal({ bus, userLocation, onClose, token }) {
             <b>Simulated position.</b> Estimated from departure time & avg speed — not real-time GPS.
           </p>
         </div>
+        {bus.statusNote && (
+          <div style={{ margin: "0 20px 14px", display: "flex", gap: 8, alignItems: "flex-start", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "10px 12px" }}>
+            <span style={{ fontSize: 14 }}>🚨</span>
+            <p style={{ fontSize: 12, color: "#991b1b", margin: 0, lineHeight: 1.5 }}>
+              <b>Verified update:</b> {bus.statusNote}
+            </p>
+          </div>
+        )}
 
         {/* Map */}
         <div style={{ margin: "0 20px 16px", borderRadius: 16, overflow: "hidden", height: 300, border: "1px solid #e5e7eb" }}>
@@ -404,6 +415,8 @@ function BusCard({ bus, index, onTrack }) {
   const status = effectiveStatus(bus);
   const badgeClass = {
     SERVICE_DISRUPTED: "bp-badge-default",
+    LIKELY_DELAYED: "bp-badge-default",
+    CONFIRMED_DELAY: "bp-badge-default",
     NEARBY: "bp-badge-nearby", APPROACHING: "bp-badge-approaching",
     NOT_DEPARTED: "bp-badge-notdeparted"
   }[status] || "bp-badge-default";
@@ -444,6 +457,11 @@ function BusCard({ bus, index, onTrack }) {
               {liveStatusLabel(bus.liveStatus)}
               {bus.delayMinutes > 0 ? ` · +${bus.delayMinutes} min delay` : ""}
               {bus.confidenceScore ? ` · ${Math.round(bus.confidenceScore)}% confidence` : ""}
+            </p>
+          )}
+          {bus.statusNote && (
+            <p style={{ fontSize: 11, color: "#b45309", margin: "4px 0 0", fontWeight: 600 }}>
+              {bus.statusNote}
             </p>
           )}
           {bus.recommendationType === "TRANSFER_SUGGESTION" && bus.recommendationNote && (
@@ -490,6 +508,7 @@ export default function UpcomingBuses({ location, onChangeLocation }) {
   const [destinationQuery, setDestinationQuery] = useState("");
   const [destinationResults, setDestinationResults] = useState([]);
   const [destinationOpen, setDestinationOpen] = useState(false);
+  const [destinationLoading, setDestinationLoading] = useState(false);
   const [selectedDestination, setSelectedDestination] = useState(null);
   const lastLoggedRef = useRef({ key: "", at: 0 });
   const firstDestRef = useRef(true);
@@ -551,9 +570,10 @@ export default function UpcomingBuses({ location, onChangeLocation }) {
   }, [location, selectedDestination]);
   useEffect(() => {
     const q = destinationQuery.trim();
-    if (q.length < 2) { setDestinationResults([]); return; }
+    if (q.length < 2) { setDestinationResults([]); setDestinationLoading(false); return; }
     const t = setTimeout(async () => {
       try {
+        setDestinationLoading(true);
         const places = await searchDestinationPlaces(q);
         setDestinationResults(places.map((p, i) => ({
           id: p.place_id || `osm-${i}`,
@@ -563,6 +583,7 @@ export default function UpcomingBuses({ location, onChangeLocation }) {
         })));
         setDestinationOpen(true);
       } catch { setDestinationResults([]); }
+      finally { setDestinationLoading(false); }
     }, 250);
     return () => clearTimeout(t);
   }, [destinationQuery]);
@@ -584,31 +605,54 @@ export default function UpcomingBuses({ location, onChangeLocation }) {
             </p>
 
             {/* Destination search */}
-            <div style={{ position: "relative", marginBottom: 10 }}>
-              <span style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", fontSize: 15, pointerEvents: "none" }}>📍</span>
-              <input className="bp-input" style={{ paddingLeft: 36 }}
-                type="text"
-                value={selectedDestination ? selectedDestination.name : destinationQuery}
-                onChange={e => { setSelectedDestination(null); setDestinationQuery(e.target.value); setDestinationOpen(true); }}
-                onFocus={() => setDestinationOpen(true)}
-                placeholder="Filter by destination (e.g. Sankarankovil)"
-              />
-              {selectedDestination && (
-                <button onClick={() => { setSelectedDestination(null); setDestinationQuery(""); setDestinationResults([]); setDestinationOpen(false); }}
-                  style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", border: "none", background: "#e5e7eb", borderRadius: 20, padding: "2px 8px", fontSize: 11, cursor: "pointer", color: "#6b7280", fontWeight: 600 }}>
-                  ✕ Clear
-                </button>
-              )}
-              {destinationOpen && !selectedDestination && destinationResults.length > 0 && (
-                <div className="bp-dropdown">
-                  {destinationResults.map(p => (
-                    <button key={p.id} className="bp-dropdown-item" onClick={() => { setSelectedDestination(p); setDestinationQuery(p.name); setDestinationOpen(false); }}>
-                      <div style={{ fontWeight: 600, fontSize: 14, color: "#111827" }}>{p.name}</div>
-                      {p.subtitle && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>{p.subtitle}</div>}
-                    </button>
-                  ))}
-                </div>
-              )}
+            <div style={{ marginBottom: 10 }}>
+              <p style={{ fontSize: 12, fontWeight: 600, color: "#4b5563", margin: "0 0 6px" }}>
+                Destination filter
+              </p>
+              <div style={{ position: "relative" }}>
+                <span style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", fontSize: 15, pointerEvents: "none" }}>📍</span>
+                <input className="bp-input" style={{ paddingLeft: 36, paddingRight: 74, height: 42, borderWidth: 1.5 }}
+                  type="text"
+                  spellCheck={false}
+                  value={selectedDestination ? selectedDestination.name : destinationQuery}
+                  onChange={e => { setSelectedDestination(null); setDestinationQuery(e.target.value); setDestinationOpen(true); }}
+                  onFocus={() => setDestinationOpen(true)}
+                  placeholder="Search destination (e.g. Sankarankovil)"
+                />
+                {(selectedDestination || destinationQuery) && (
+                  <button
+                    onClick={() => { setSelectedDestination(null); setDestinationQuery(""); setDestinationResults([]); setDestinationOpen(false); }}
+                    style={{
+                      position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                      border: "none", background: "#eef2f7", borderRadius: 18, padding: "4px 9px",
+                      fontSize: 11, cursor: "pointer", color: "#4b5563", fontWeight: 600
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
+                {destinationOpen && !selectedDestination && (
+                  <div className="bp-dropdown" style={{ maxHeight: 260 }}>
+                    {destinationLoading && (
+                      <div style={{ padding: "12px 14px", fontSize: 12, color: "#6b7280" }}>Searching places...</div>
+                    )}
+                    {!destinationLoading && destinationResults.length === 0 && destinationQuery.trim().length >= 2 && (
+                      <div style={{ padding: "12px 14px", fontSize: 12, color: "#9ca3af" }}>
+                        No places found. Try another spelling.
+                      </div>
+                    )}
+                    {!destinationLoading && destinationResults.map(p => (
+                      <button key={p.id} className="bp-dropdown-item" onClick={() => { setSelectedDestination(p); setDestinationQuery(p.name); setDestinationOpen(false); }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: "#111827" }}>{p.name}</div>
+                        {p.subtitle && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>{p.subtitle}</div>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <p style={{ fontSize: 11, color: "#9ca3af", margin: "6px 2px 0" }}>
+                Filter buses by destination or transfer suggestions.
+              </p>
             </div>
 
             {selectedDestination && (

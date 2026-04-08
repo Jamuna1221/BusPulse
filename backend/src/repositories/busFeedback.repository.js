@@ -23,6 +23,8 @@ export const createBusFeedbackTables = async () => {
       delay_minutes INTEGER DEFAULT 0,
       crowd_level VARCHAR(24),
       status VARCHAR(40) NOT NULL DEFAULT 'ON_TIME',
+      status_note TEXT,
+      scheduler_verified BOOLEAN NOT NULL DEFAULT false,
       confidence_score NUMERIC(5,2) NOT NULL DEFAULT 0,
       report_count INTEGER NOT NULL DEFAULT 0,
       last_updated TIMESTAMPTZ DEFAULT NOW()
@@ -37,9 +39,22 @@ export const createBusFeedbackTables = async () => {
       type VARCHAR(24) NOT NULL,
       description TEXT,
       reported_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      scheduler_confirmed BOOLEAN NOT NULL DEFAULT false,
+      confirmed_by_scheduler INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      confirmed_at TIMESTAMPTZ,
+      resolved_by_scheduler INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      resolved_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+
+  await pool.query(`ALTER TABLE bus_live_status ADD COLUMN IF NOT EXISTS status_note TEXT`);
+  await pool.query(`ALTER TABLE bus_live_status ADD COLUMN IF NOT EXISTS scheduler_verified BOOLEAN NOT NULL DEFAULT false`);
+  await pool.query(`ALTER TABLE incident_reports ADD COLUMN IF NOT EXISTS scheduler_confirmed BOOLEAN NOT NULL DEFAULT false`);
+  await pool.query(`ALTER TABLE incident_reports ADD COLUMN IF NOT EXISTS confirmed_by_scheduler INTEGER REFERENCES users(id) ON DELETE SET NULL`);
+  await pool.query(`ALTER TABLE incident_reports ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ`);
+  await pool.query(`ALTER TABLE incident_reports ADD COLUMN IF NOT EXISTS resolved_by_scheduler INTEGER REFERENCES users(id) ON DELETE SET NULL`);
+  await pool.query(`ALTER TABLE incident_reports ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ`);
 
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_user_events_service_created
@@ -105,24 +120,28 @@ export const upsertBusLiveStatus = async ({
   delayMinutes = 0,
   crowdLevel = null,
   status = "ON_TIME",
+  statusNote = null,
+  schedulerVerified = false,
   confidenceScore = 0,
   reportCount = 0,
 }) =>
   pool.query(
     `INSERT INTO bus_live_status
-      (service_id, route_id, current_eta_minutes, delay_minutes, crowd_level, status, confidence_score, report_count, last_updated)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+      (service_id, route_id, current_eta_minutes, delay_minutes, crowd_level, status, status_note, scheduler_verified, confidence_score, report_count, last_updated)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
      ON CONFLICT (service_id) DO UPDATE SET
       route_id = EXCLUDED.route_id,
       current_eta_minutes = EXCLUDED.current_eta_minutes,
       delay_minutes = EXCLUDED.delay_minutes,
       crowd_level = EXCLUDED.crowd_level,
       status = EXCLUDED.status,
+      status_note = EXCLUDED.status_note,
+      scheduler_verified = EXCLUDED.scheduler_verified,
       confidence_score = EXCLUDED.confidence_score,
       report_count = EXCLUDED.report_count,
       last_updated = NOW()
      RETURNING *`,
-    [serviceId, routeId ?? null, currentEtaMinutes, delayMinutes, crowdLevel, status, confidenceScore, reportCount]
+    [serviceId, routeId ?? null, currentEtaMinutes, delayMinutes, crowdLevel, status, statusNote, schedulerVerified, confidenceScore, reportCount]
   );
 
 export const insertIncidentReport = async ({
@@ -187,3 +206,27 @@ export const hasRecentFeedbackByUser = async (userId, serviceId, minutes = 2) =>
   );
   return result.rows.length > 0;
 };
+
+export const confirmIncidentByScheduler = async ({ incidentId, schedulerId }) =>
+  pool.query(
+    `UPDATE incident_reports
+     SET scheduler_confirmed = true,
+         confirmed_by_scheduler = $2,
+         confirmed_at = NOW(),
+         resolved_by_scheduler = NULL,
+         resolved_at = NULL
+     WHERE id = $1
+     RETURNING *`,
+    [incidentId, schedulerId]
+  );
+
+export const resolveIncidentByScheduler = async ({ incidentId, schedulerId }) =>
+  pool.query(
+    `UPDATE incident_reports
+     SET scheduler_confirmed = false,
+         resolved_by_scheduler = $2,
+         resolved_at = NOW()
+     WHERE id = $1
+     RETURNING *`,
+    [incidentId, schedulerId]
+  );

@@ -15,6 +15,8 @@ const DELAY_VALUE_TO_MINUTES = {
   not_arrived: 20,
   delayed: 10,
 };
+const RESOLVE_NOTE_WINDOW_MINUTES = 10;
+const SCHEDULER_DELAY_OVERRIDE_WINDOW_MINUTES = 30;
 
 function round(value) {
   return Math.round(value * 100) / 100;
@@ -119,7 +121,10 @@ function computeConfidence({ reportCount, status, incidentCount, routeReportCoun
 }
 
 function computeStatus({ incidents, delayMinutes, reportCount, crowdLevel }) {
-  if (incidents.some((i) => i.type === "accident" || i.type === "breakdown")) {
+  if (incidents.some((i) => i.scheduler_confirmed && !i.resolved_at)) {
+    return "SERVICE_DISRUPTED";
+  }
+  if (incidents.some((i) => (i.type === "accident" || i.type === "breakdown") && !i.resolved_at)) {
     return "SERVICE_DISRUPTED";
   }
 
@@ -132,6 +137,7 @@ function computeStatus({ incidents, delayMinutes, reportCount, crowdLevel }) {
 
 export async function recomputeAndStoreLiveStatus(serviceId, { routeId = null, currentEtaMinutes = null } = {}) {
   const effectiveRouteId = routeId ?? (await getServiceRouteId(serviceId));
+  const previousLive = await getLiveStatusByServiceId(serviceId);
   const [eventsResult, incidentsResult, routeEventsResult, routeIncidentsResult] = await Promise.all([
     getRecentEventsByService(serviceId, 45),
     getRecentIncidentsByService(serviceId, 120),
@@ -148,9 +154,13 @@ export async function recomputeAndStoreLiveStatus(serviceId, { routeId = null, c
   const incidentCount = incidents.length;
   const delayMinutes = computeDelayMinutes(events);
   const crowdLevel = computeCrowdLevel(events);
-  const status = computeStatus({ incidents, delayMinutes, reportCount, crowdLevel });
+  let status = computeStatus({ incidents, delayMinutes, reportCount, crowdLevel });
   const agreementRatio = computeAgreementRatio(routeEvents, routeIncidents, status);
-  const confidenceScore = round(
+  let schedulerVerified = incidents.some((i) => i.scheduler_confirmed && !i.resolved_at);
+  let effectiveDelayMinutes = delayMinutes;
+  let confidenceScore = schedulerVerified
+    ? 100
+    : round(
     computeConfidence({
       reportCount,
       status,
@@ -159,14 +169,56 @@ export async function recomputeAndStoreLiveStatus(serviceId, { routeId = null, c
       agreementRatio,
     })
   );
+  let statusNote = null;
+
+  const previousUpdatedAtMs = previousLive?.last_updated
+    ? new Date(previousLive.last_updated).getTime()
+    : 0;
+  const overrideAgeMinutes = previousUpdatedAtMs
+    ? (Date.now() - previousUpdatedAtMs) / 60000
+    : Infinity;
+  const hasActiveSchedulerDelayOverride =
+    previousLive?.scheduler_verified &&
+    previousLive?.status === "LIKELY_DELAYED" &&
+    typeof previousLive?.status_note === "string" &&
+    previousLive.status_note.startsWith("Scheduler reported") &&
+    overrideAgeMinutes <= SCHEDULER_DELAY_OVERRIDE_WINDOW_MINUTES;
+
+  if (!schedulerVerified && hasActiveSchedulerDelayOverride) {
+    status = "LIKELY_DELAYED";
+    effectiveDelayMinutes = Number(previousLive.delay_minutes) || effectiveDelayMinutes;
+    schedulerVerified = true;
+    confidenceScore = 100;
+    statusNote = previousLive.status_note;
+  }
+
+  if (schedulerVerified) {
+    statusNote = status === "SERVICE_DISRUPTED"
+      ? "Scheduler confirmed accident/blockage"
+      : statusNote;
+  } else {
+    const latestResolvedAt = incidents
+      .map((i) => i.resolved_at)
+      .filter(Boolean)
+      .map((ts) => new Date(ts).getTime())
+      .sort((a, b) => b - a)[0];
+    if (latestResolvedAt) {
+      const elapsedMinutes = (Date.now() - latestResolvedAt) / 60000;
+      if (elapsedMinutes <= RESOLVE_NOTE_WINDOW_MINUTES) {
+        statusNote = "Scheduler marked route clear";
+      }
+    }
+  }
 
   const { rows } = await upsertBusLiveStatus({
     serviceId,
     routeId: effectiveRouteId,
     currentEtaMinutes,
-    delayMinutes,
+    delayMinutes: effectiveDelayMinutes,
     crowdLevel,
     status,
+    statusNote,
+    schedulerVerified,
     confidenceScore,
     reportCount,
   });

@@ -31,6 +31,8 @@ import placesRoutes from "./routes/places.routes.js";
 // Scheduler
 import schedulerRouteRoutes from "./routes/schedulerRoute.routes.js";
 import schedulerServiceRoutes from "./routes/schedulerService.routes.js";
+import schedulerNotificationsRoutes from "./routes/schedulerNotifications.routes.js";
+import schedulerAnalyticsRoutes from "./routes/schedulerAnalytics.routes.js";
 
 // Activity Logs
 import activityLogsRoutes from "./routes/activityLogs.routes.js";
@@ -104,6 +106,8 @@ app.use("/api/places", placesRoutes);
 // -------- SCHEDULER CORE --------
 app.use("/api/scheduler/routes", schedulerRouteRoutes);
 app.use("/api/scheduler/services", schedulerServiceRoutes);
+app.use("/api/scheduler/notifications", schedulerNotificationsRoutes);
+app.use("/api/scheduler/analytics", schedulerAnalyticsRoutes);
 
 // -------- ACTIVITY LOGS --------
 app.use("/api/scheduler/activity-logs", activityLogsRoutes);

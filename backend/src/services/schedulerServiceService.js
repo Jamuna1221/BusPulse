@@ -54,7 +54,14 @@ export async function getAllServicesService({ search, routeId } = {}) {
 export async function getServiceService(id) {
   const s = await getServiceById(id);
   if (!s) throw new Error("Service not found");
-  return { ...s, departure_time: formatTime(s.departure_time) };
+  return {
+    ...s,
+    departure_time: formatTime(s.departure_time),
+    route_geometry: Array.isArray(s.route_geometry) ? s.route_geometry : [],
+    delay_minutes: s.delay_minutes != null ? Number(s.delay_minutes) : 0,
+    confidence_score: s.confidence_score != null ? Number(s.confidence_score) : null,
+    scheduler_verified: Boolean(s.scheduler_verified),
+  };
 }
 
 export async function getRoutesForPickerService() {
