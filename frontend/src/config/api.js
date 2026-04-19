@@ -46,6 +46,8 @@ export const adminUsersAPI = {
 
   getById: (id) => apiCall(`/api/admin/users/${id}`),
 
+  getActivity: (id) => apiCall(`/api/admin/users/${id}/activity`),
+
   create: (userData) =>
     apiCall("/api/admin/users", {
       method: "POST",
@@ -119,6 +121,70 @@ export const adminAuthAPI = {
     localStorage.removeItem("adminAuthenticated");
     localStorage.removeItem("adminEmail");
   },
+};
+
+export const adminIncidentAPI = {
+  getAlerts: (params = {}) => {
+    const clean = Object.fromEntries(
+      Object.entries(params).filter(([, v]) => v !== "" && v != null)
+    );
+    const qs = new URLSearchParams(clean).toString();
+    return apiCall(`/api/admin/alerts${qs ? `?${qs}` : ""}`);
+  },
+  getIncidents: (params = {}) => {
+    const clean = Object.fromEntries(
+      Object.entries(params).filter(([, v]) => v !== "" && v != null)
+    );
+    const qs = new URLSearchParams(clean).toString();
+    return apiCall(`/api/admin/incidents${qs ? `?${qs}` : ""}`);
+  },
+  acknowledgeIncident: (incidentId) =>
+    apiCall(`/api/admin/incident/${incidentId}/acknowledge`, { method: "POST" }),
+  resolveIncident: (incidentId) =>
+    apiCall(`/api/admin/incident/${incidentId}/resolve`, { method: "POST" }),
+};
+
+export const adminAnalyticsAPI = {
+  getOverview: () => apiCall("/api/admin/analytics/overview"),
+};
+
+export const adminReportsAPI = {
+  getOverview: () => apiCall("/api/admin/reports/overview"),
+  generate: ({ type, periodLabel, format }) =>
+    apiCall("/api/admin/reports/generate", {
+      method: "POST",
+      body: JSON.stringify({ type, periodLabel, format }),
+    }),
+  getDownloadUrl: (id) => `${API_BASE_URL}/api/admin/reports/${id}/download`,
+};
+
+export const adminFeedbackAPI = {
+  getAll: (params = {}) => {
+    const clean = Object.fromEntries(
+      Object.entries(params).filter(([, v]) => v !== "" && v != null)
+    );
+    const qs = new URLSearchParams(clean).toString();
+    return apiCall(`/api/admin/feedback${qs ? `?${qs}` : ""}`);
+  },
+  updateStatus: (id, status, priority = null) =>
+    apiCall(`/api/admin/feedback/${id}/status`, {
+      method: "POST",
+      body: JSON.stringify({ status, priority }),
+    }),
+};
+
+export const adminSettingsAPI = {
+  getMe: () => apiCall("/api/admin/settings/me"),
+  updateMe: (data) =>
+    apiCall("/api/admin/settings/me", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  changePassword: ({ currentPassword, newPassword }) =>
+    apiCall("/api/admin/settings/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
 };
 
 // ================== SCHEDULER AUTH API ==================
@@ -376,6 +442,11 @@ export default {
   adminUsersAPI,
   adminSchedulersAPI,
   adminAuthAPI,
+  adminIncidentAPI,
+  adminAnalyticsAPI,
+  adminReportsAPI,
+  adminFeedbackAPI,
+  adminSettingsAPI,
   schedulerAuthAPI,
   schedulerBusAPI,
   schedulerRouteAPI,

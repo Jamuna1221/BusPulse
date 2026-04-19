@@ -47,6 +47,13 @@ const ReportsAnalytics = () => {
     () => Math.max(1, ...analytics.searchesPerDay.map((d) => Number(d.count) || 0)),
     [analytics.searchesPerDay]
   );
+  const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const searchesSeries = useMemo(() => {
+    const counts = Object.fromEntries(
+      analytics.searchesPerDay.map((d) => [String(d.day), Number(d.count) || 0])
+    );
+    return weekDays.map((day) => ({ day, count: counts[day] ?? 0 }));
+  }, [analytics.searchesPerDay]);
 
   const maxLiveStatusCount = useMemo(
     () => Math.max(1, ...analytics.liveStatuses.map((d) => Number(d.count) || 0)),
@@ -144,13 +151,18 @@ const ReportsAnalytics = () => {
         <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
           <h2 className="text-lg font-bold text-white mb-4">Searches Per Day (This Week)</h2>
           <div className="flex items-end gap-3 h-48">
-            {analytics.searchesPerDay.map((d) => (
+            {searchesSeries.map((d) => (
               <div key={d.day} className="flex-1 flex flex-col items-center gap-2">
                 <span className="text-xs text-gray-400">{d.count}</span>
                 <div className="w-full h-28 flex items-end">
                   <div
                     className="w-full bg-green-500/80 rounded-t-lg hover:bg-green-400 transition-colors"
-                    style={{ height: `${((Number(d.count) || 0) / maxSearchesPerDay) * 100}%` }}
+                    style={{
+                      height: d.count > 0
+                        ? `${Math.max(14, ((Number(d.count) || 0) / maxSearchesPerDay) * 100)}%`
+                        : "6%",
+                      opacity: d.count > 0 ? 1 : 0.35,
+                    }}
                   ></div>
                 </div>
                 <span className="text-xs text-gray-400">{d.day}</span>

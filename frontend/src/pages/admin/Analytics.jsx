@@ -1,6 +1,50 @@
+import { useEffect, useMemo, useState } from 'react';
 import { TrendingUp, Users, Bus, Clock, Download } from 'lucide-react';
+import { adminAnalyticsAPI } from "../../config/api";
 
 const Analytics = () => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [analytics, setAnalytics] = useState({
+    summary: {
+      totalRides: 0,
+      activeUsers: 0,
+      avgTripMinutes: 0,
+      onTimeRate: 0,
+      totalUsers: 0,
+      totalIncidents30d: 0,
+      openIncidents: 0,
+      resolvedIncidents: 0,
+    },
+    userGrowth: [],
+    topRoutes: [],
+    peakHours: [],
+  });
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    setError("");
+    adminAnalyticsAPI
+      .getOverview()
+      .then((res) => {
+        if (!mounted) return;
+        setAnalytics(res.data || analytics);
+      })
+      .catch((e) => {
+        if (!mounted) return;
+        setError(e.message || "Failed to load analytics.");
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const maxGrowth = useMemo(() => Math.max(1, ...analytics.userGrowth.map((d) => d.heightPct || 0)), [analytics.userGrowth]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -15,6 +59,9 @@ const Analytics = () => {
         </button>
       </div>
 
+      {loading && <div className="text-gray-400 text-sm">Loading analytics...</div>}
+      {!loading && error && <div className="text-red-400 text-sm">{error}</div>}
+
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
@@ -22,11 +69,11 @@ const Analytics = () => {
             <p className="text-gray-400 text-sm">Total Rides</p>
             <Bus className="text-blue-400" size={24} />
           </div>
-          <p className="text-3xl font-bold text-white">45,231</p>
+          <p className="text-3xl font-bold text-white">{analytics.summary.totalRides.toLocaleString()}</p>
           <div className="flex items-center gap-1 mt-2">
             <TrendingUp size={16} className="text-green-400" />
-            <span className="text-green-400 text-sm">+18.2%</span>
-            <span className="text-gray-500 text-sm">vs last month</span>
+            <span className="text-green-400 text-sm">{analytics.summary.totalIncidents30d} incidents</span>
+            <span className="text-gray-500 text-sm">last 30 days</span>
           </div>
         </div>
 
@@ -35,11 +82,11 @@ const Analytics = () => {
             <p className="text-gray-400 text-sm">Active Users</p>
             <Users className="text-green-400" size={24} />
           </div>
-          <p className="text-3xl font-bold text-white">12,450</p>
+          <p className="text-3xl font-bold text-white">{analytics.summary.activeUsers.toLocaleString()}</p>
           <div className="flex items-center gap-1 mt-2">
             <TrendingUp size={16} className="text-green-400" />
-            <span className="text-green-400 text-sm">+12.5%</span>
-            <span className="text-gray-500 text-sm">vs last month</span>
+            <span className="text-green-400 text-sm">{analytics.summary.totalUsers.toLocaleString()} total users</span>
+            <span className="text-gray-500 text-sm">registered</span>
           </div>
         </div>
 
@@ -48,11 +95,11 @@ const Analytics = () => {
             <p className="text-gray-400 text-sm">Avg Trip Time</p>
             <Clock className="text-purple-400" size={24} />
           </div>
-          <p className="text-3xl font-bold text-white">42 min</p>
+          <p className="text-3xl font-bold text-white">{analytics.summary.avgTripMinutes} min</p>
           <div className="flex items-center gap-1 mt-2">
             <TrendingUp size={16} className="text-red-400 rotate-180" />
-            <span className="text-green-400 text-sm">-3.2%</span>
-            <span className="text-gray-500 text-sm">faster</span>
+            <span className="text-green-400 text-sm">Live ETA average</span>
+            <span className="text-gray-500 text-sm">snapshot</span>
           </div>
         </div>
 
@@ -61,11 +108,11 @@ const Analytics = () => {
             <p className="text-gray-400 text-sm">On-Time Rate</p>
             <TrendingUp className="text-green-400" size={24} />
           </div>
-          <p className="text-3xl font-bold text-white">87.3%</p>
+          <p className="text-3xl font-bold text-white">{analytics.summary.onTimeRate}%</p>
           <div className="flex items-center gap-1 mt-2">
             <TrendingUp size={16} className="text-green-400" />
-            <span className="text-green-400 text-sm">+5.1%</span>
-            <span className="text-gray-500 text-sm">improvement</span>
+            <span className="text-green-400 text-sm">{analytics.summary.openIncidents} open</span>
+            <span className="text-gray-500 text-sm">incidents now</span>
           </div>
         </div>
       </div>
@@ -76,16 +123,20 @@ const Analytics = () => {
         <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
           <h2 className="text-xl font-bold text-white mb-6">User Growth Trend</h2>
           <div className="h-64 flex items-end justify-between gap-2">
-            {[65, 72, 68, 85, 92, 88, 95, 78, 82, 90, 97, 100].map((height, index) => (
-              <div key={index} className="flex-1 flex flex-col items-center gap-2">
-                <div className="w-full bg-blue-600 rounded-t-lg hover:bg-blue-500 transition-all cursor-pointer relative group"
-                     style={{ height: `${height}%` }}>
-                  <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-slate-900 px-2 py-1 rounded text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                    {Math.round(12450 * (height / 100))} users
+            {analytics.userGrowth.map((point, index) => (
+              <div key={`${point.month}-${index}`} className="flex-1 flex flex-col items-center gap-2">
+                <div className="w-full h-44 flex items-end">
+                  <div
+                    className="w-full bg-blue-600 rounded-t-lg hover:bg-blue-500 transition-all cursor-pointer relative group"
+                    style={{ height: `${Math.max(4, ((point.heightPct || 0) / maxGrowth) * 100)}%` }}
+                  >
+                    <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-slate-900 px-2 py-1 rounded text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                      {point.users} users
+                    </div>
                   </div>
                 </div>
                 <span className="text-gray-500 text-xs">
-                  {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][index]}
+                  {point.month}
                 </span>
               </div>
             ))}
@@ -96,22 +147,16 @@ const Analytics = () => {
         <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
           <h2 className="text-xl font-bold text-white mb-6">Top Routes by Usage</h2>
           <div className="space-y-4">
-            {[
-              { route: 'Route A - Chennai Central to Tambaram', usage: 92 },
-              { route: 'Route B - T Nagar to Airport', usage: 85 },
-              { route: 'Route C - Adyar to Velachery', usage: 78 },
-              { route: 'Route D - Porur to OMR', usage: 72 },
-              { route: 'Route E - Anna Nagar to Guindy', usage: 65 },
-            ].map((item, index) => (
+            {analytics.topRoutes.map((item, index) => (
               <div key={index}>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-gray-300 text-sm">{item.route}</span>
-                  <span className="text-white font-semibold">{item.usage}%</span>
+                  <span className="text-white font-semibold">{item.usage}</span>
                 </div>
                 <div className="w-full bg-slate-700 rounded-full h-2">
                   <div
                     className="bg-gradient-to-r from-blue-600 to-blue-400 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${item.usage}%` }}
+                    style={{ width: `${item.pct}%` }}
                   ></div>
                 </div>
               </div>
@@ -126,11 +171,7 @@ const Analytics = () => {
         <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
           <h2 className="text-xl font-bold text-white mb-4">Peak Usage Hours</h2>
           <div className="space-y-3">
-            {[
-              { time: '8:00 AM - 10:00 AM', percentage: 85, label: 'Morning Rush' },
-              { time: '5:00 PM - 7:00 PM', percentage: 90, label: 'Evening Rush' },
-              { time: '12:00 PM - 2:00 PM', percentage: 60, label: 'Lunch Time' },
-            ].map((peak, index) => (
+            {analytics.peakHours.map((peak, index) => (
               <div key={index} className="p-3 bg-slate-700/50 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-white font-medium">{peak.label}</span>
@@ -142,9 +183,9 @@ const Analytics = () => {
           </div>
         </div>
 
-        {/* Device Health */}
+        {/* Incident Health */}
         <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-          <h2 className="text-xl font-bold text-white mb-4">Device Health Score</h2>
+          <h2 className="text-xl font-bold text-white mb-4">Incident Health</h2>
           <div className="flex items-center justify-center mb-4">
             <div className="relative w-32 h-32">
               <svg className="w-full h-full transform -rotate-90">
@@ -164,68 +205,66 @@ const Analytics = () => {
                   strokeWidth="12"
                   fill="none"
                   strokeDasharray="351.86"
-                  strokeDashoffset="87.96"
+                  strokeDashoffset={`${351.86 - ((analytics.summary.onTimeRate || 0) / 100) * 351.86}`}
                   strokeLinecap="round"
                   className="transition-all duration-1000"
                 />
               </svg>
               <div className="absolute inset-0 flex items-center justify-center flex-col">
-                <span className="text-3xl font-bold text-white">75%</span>
-                <span className="text-gray-400 text-xs">Healthy</span>
+                <span className="text-3xl font-bold text-white">{analytics.summary.onTimeRate}%</span>
+                <span className="text-gray-400 text-xs">On-time</span>
               </div>
             </div>
           </div>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-400">Battery Issues:</span>
-              <span className="text-orange-400">12 devices</span>
+              <span className="text-gray-400">Open Incidents:</span>
+              <span className="text-orange-400">{analytics.summary.openIncidents}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">GPS Signal Loss:</span>
-              <span className="text-red-400">8 devices</span>
+              <span className="text-gray-400">Resolved (30d):</span>
+              <span className="text-green-400">{analytics.summary.resolvedIncidents}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">Optimal:</span>
-              <span className="text-green-400">240 devices</span>
+              <span className="text-gray-400">Total (30d):</span>
+              <span className="text-blue-400">{analytics.summary.totalIncidents30d}</span>
             </div>
           </div>
         </div>
 
-        {/* Customer Satisfaction */}
+        {/* Passenger Demand */}
         <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-          <h2 className="text-xl font-bold text-white mb-4">Customer Satisfaction</h2>
+          <h2 className="text-xl font-bold text-white mb-4">Passenger Demand</h2>
           <div className="text-center mb-4">
-            <div className="text-5xl font-bold text-white mb-2">4.2</div>
+            <div className="text-5xl font-bold text-white mb-2">{analytics.summary.totalRides.toLocaleString()}</div>
             <div className="flex items-center justify-center gap-1 mb-2">
               {[...Array(5)].map((_, i) => (
                 <svg
                   key={i}
-                  className={`w-6 h-6 ${i < 4 ? 'text-yellow-400 fill-yellow-400' : 'text-gray-600'}`}
+                  className={`w-6 h-6 ${i < Math.min(5, Math.max(1, Math.round((analytics.summary.onTimeRate || 0) / 20))) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-600'}`}
                   viewBox="0 0 24 24"
                 >
                   <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                 </svg>
               ))}
             </div>
-            <p className="text-gray-400 text-sm">Based on 1,247 reviews</p>
+            <p className="text-gray-400 text-sm">searches in last 30 days</p>
           </div>
           <div className="space-y-2">
             {[
-              { stars: 5, count: 687, percentage: 55 },
-              { stars: 4, count: 374, percentage: 30 },
-              { stars: 3, count: 125, percentage: 10 },
-              { stars: 2, count: 37, percentage: 3 },
-              { stars: 1, count: 24, percentage: 2 },
+              { stars: "Open incidents", count: analytics.summary.openIncidents, percentage: analytics.summary.totalIncidents30d ? Math.round((analytics.summary.openIncidents / analytics.summary.totalIncidents30d) * 100) : 0 },
+              { stars: "Resolved", count: analytics.summary.resolvedIncidents, percentage: analytics.summary.totalIncidents30d ? Math.round((analytics.summary.resolvedIncidents / analytics.summary.totalIncidents30d) * 100) : 0 },
+              { stars: "Active users", count: analytics.summary.activeUsers, percentage: analytics.summary.totalUsers ? Math.round((analytics.summary.activeUsers / analytics.summary.totalUsers) * 100) : 0 },
             ].map((rating) => (
               <div key={rating.stars} className="flex items-center gap-2">
-                <span className="text-gray-400 text-sm w-8">{rating.stars}★</span>
+                <span className="text-gray-400 text-sm w-24">{rating.stars}</span>
                 <div className="flex-1 bg-slate-700 rounded-full h-2">
                   <div
                     className="bg-yellow-400 h-2 rounded-full"
                     style={{ width: `${rating.percentage}%` }}
                   ></div>
                 </div>
-                <span className="text-gray-400 text-xs w-12 text-right">{rating.count}</span>
+                <span className="text-gray-400 text-xs w-16 text-right">{rating.count}</span>
               </div>
             ))}
           </div>

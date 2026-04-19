@@ -9,11 +9,11 @@ import {
   updateDeparture,
   deleteDeparture,
 } from "../controllers/schedulerService.controller.js";
-import { verifySchedulerToken } from "../middleware/auth.middleware.js";
+import { verifySchedulerOrAdmin } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-router.use(verifySchedulerToken);
+router.use(verifySchedulerOrAdmin);
 
 // GET  /api/scheduler/services             — all services grouped by route + stats
 router.get("/", getAllServices);

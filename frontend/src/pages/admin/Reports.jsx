@@ -1,79 +1,106 @@
-import { FileText, Download, Calendar, Filter, TrendingUp, Users, Bus, AlertTriangle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { FileText, Download, Calendar, Filter, TrendingUp, Users, Bus, AlertTriangle, Route } from 'lucide-react';
+import { adminReportsAPI } from "../../config/api";
 
 const Reports = () => {
-  const recentReports = [
-    {
-      id: 1,
-      title: 'Monthly Operations Report',
-      type: 'Operations',
-      period: 'January 2026',
-      generatedAt: '2026-02-01',
-      size: '2.4 MB',
-      format: 'PDF',
-    },
-    {
-      id: 2,
-      title: 'Device Performance Analysis',
-      type: 'Technical',
-      period: 'Last 30 Days',
-      generatedAt: '2026-02-05',
-      size: '1.8 MB',
-      format: 'Excel',
-    },
-    {
-      id: 3,
-      title: 'Customer Feedback Summary',
-      type: 'Customer Service',
-      period: 'Q4 2025',
-      generatedAt: '2026-01-15',
-      size: '956 KB',
-      format: 'PDF',
-    },
-    {
-      id: 4,
-      title: 'Incident Log Report',
-      type: 'Safety',
-      period: 'January 2026',
-      generatedAt: '2026-02-02',
-      size: '1.2 MB',
-      format: 'PDF',
-    },
-  ];
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [overview, setOverview] = useState({
+    stats: { totalReportsYear: 0, totalReports: 0, storageBytes: 0, scheduledReports: 0 },
+    templates: [],
+    recentReports: [],
+    lastGenerated: null,
+  });
+  const [form, setForm] = useState({
+    type: "operations_summary",
+    periodLabel: "Last 30 Days",
+    format: "csv",
+  });
 
-  const reportTemplates = [
-    {
-      id: 1,
-      name: 'Daily Operations Summary',
-      description: 'Bus activity, device status, and key metrics',
-      icon: Bus,
-      color: 'blue',
-      frequency: 'Daily',
-    },
-    {
-      id: 2,
-      name: 'User Analytics Report',
-      description: 'User growth, engagement, and behavior patterns',
-      icon: Users,
-      color: 'green',
-      frequency: 'Weekly',
-    },
-    {
-      id: 3,
-      name: 'Performance Metrics',
-      description: 'On-time performance, delays, and efficiency',
-      icon: TrendingUp,
-      color: 'purple',
-      frequency: 'Monthly',
-    },
-    {
-      id: 4,
-      name: 'Incident & Safety Report',
-      description: 'All incidents, accidents, and safety metrics',
-      icon: AlertTriangle,
-      color: 'red',
-      frequency: 'Monthly',
-    },
-  ];
+  const templateIcons = {
+    operations_summary: Bus,
+    user_analytics: Users,
+    performance_metrics: TrendingUp,
+    incident_safety: AlertTriangle,
+    route_top_scoring: Route,
+  };
+
+  const loadOverview = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const res = await adminReportsAPI.getOverview();
+      setOverview(res.data || overview);
+    } catch (e) {
+      setError(e.message || "Failed to load reports.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadOverview();
+  }, []);
+
+  const toSize = (bytes = 0) => {
+    const b = Number(bytes) || 0;
+    if (b < 1024) return `${b} B`;
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+    if (b < 1024 * 1024 * 1024) return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(b / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  };
+
+  const handleDownloadByPayload = (payloadText, type, format) => {
+    const ext = format === "json" ? "json" : "csv";
+    const mime = format === "json" ? "application/json;charset=utf-8" : "text/csv;charset=utf-8";
+    const blob = new Blob([payloadText || ""], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${type || "report"}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const generateReport = async (payload) => {
+    try {
+      setGenerating(true);
+      const res = await adminReportsAPI.generate(payload);
+      handleDownloadByPayload(res.payloadText, payload.type, payload.format);
+      await loadOverview();
+    } catch (e) {
+      setError(e.message || "Failed to generate report.");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const downloadExisting = (reportId) => {
+    const token = localStorage.getItem("token");
+    const url = adminReportsAPI.getDownloadUrl(reportId);
+    fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error("Failed to download");
+        return Promise.all([r.blob(), r.headers.get("content-disposition")]);
+      })
+      .then(([blob, disposition]) => {
+        const fname = disposition?.match(/filename="([^"]+)"/)?.[1] || `report-${reportId}.csv`;
+        const bUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = bUrl;
+        a.download = fname;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(bUrl);
+      })
+      .catch((e) => setError(e.message || "Failed to download report."));
+  };
 
   const getColorClasses = (color) => {
     const colors = {
@@ -99,6 +126,9 @@ const Reports = () => {
         </button>
       </div>
 
+      {loading && <div className="text-sm text-gray-400">Loading reports...</div>}
+      {!loading && error && <div className="text-sm text-red-400">{error}</div>}
+
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
@@ -106,7 +136,7 @@ const Reports = () => {
             <p className="text-gray-400 text-sm">Total Reports</p>
             <FileText className="text-blue-400" size={24} />
           </div>
-          <p className="text-3xl font-bold text-white">156</p>
+          <p className="text-3xl font-bold text-white">{overview.stats.totalReportsYear}</p>
           <p className="text-gray-400 text-sm mt-2">Generated this year</p>
         </div>
 
@@ -115,8 +145,10 @@ const Reports = () => {
             <p className="text-gray-400 text-sm">Last Generated</p>
             <Calendar className="text-green-400" size={24} />
           </div>
-          <p className="text-3xl font-bold text-white">Today</p>
-          <p className="text-gray-400 text-sm mt-2">Operations Report</p>
+          <p className="text-3xl font-bold text-white">
+            {overview.lastGenerated ? new Date(overview.lastGenerated.created_at).toLocaleDateString() : "—"}
+          </p>
+          <p className="text-gray-400 text-sm mt-2">{overview.lastGenerated?.title || "No reports yet"}</p>
         </div>
 
         <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
@@ -124,7 +156,7 @@ const Reports = () => {
             <p className="text-gray-400 text-sm">Scheduled Reports</p>
             <TrendingUp className="text-purple-400" size={24} />
           </div>
-          <p className="text-3xl font-bold text-white">12</p>
+          <p className="text-3xl font-bold text-white">{overview.stats.scheduledReports}</p>
           <p className="text-gray-400 text-sm mt-2">Auto-generated</p>
         </div>
 
@@ -133,8 +165,8 @@ const Reports = () => {
             <p className="text-gray-400 text-sm">Storage Used</p>
             <Download className="text-orange-400" size={24} />
           </div>
-          <p className="text-3xl font-bold text-white">24.8 GB</p>
-          <p className="text-gray-400 text-sm mt-2">Of 100 GB</p>
+          <p className="text-3xl font-bold text-white">{toSize(overview.stats.storageBytes)}</p>
+          <p className="text-gray-400 text-sm mt-2">Report storage</p>
         </div>
       </div>
 
@@ -142,11 +174,11 @@ const Reports = () => {
       <div>
         <h2 className="text-xl font-bold text-white mb-4">Report Templates</h2>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {reportTemplates.map((template) => {
-            const Icon = template.icon;
+          {overview.templates.map((template, idx) => {
+            const Icon = templateIcons[template.key] || FileText;
             return (
               <div
-                key={template.id}
+                key={template.key || idx}
                 className="bg-slate-800 rounded-xl border border-slate-700 p-6 hover:border-slate-600 transition-all cursor-pointer"
               >
                 <div className="flex items-start gap-4">
@@ -160,9 +192,19 @@ const Reports = () => {
                       <span className="px-3 py-1 bg-slate-700 text-gray-300 rounded-full text-xs font-medium">
                         {template.frequency}
                       </span>
-                      <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm">
+                      <button
+                        onClick={() =>
+                          generateReport({
+                            type: template.key,
+                            periodLabel: "Last 30 Days",
+                            format: "csv",
+                          })
+                        }
+                        disabled={generating}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg transition-colors text-sm"
+                      >
                         <Download size={16} />
-                        Generate
+                        {generating ? "Generating..." : "Generate"}
                       </button>
                     </div>
                   </div>
@@ -179,46 +221,57 @@ const Reports = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
             <label className="block text-gray-400 text-sm mb-2">Report Type</label>
-            <select className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500">
-              <option>Operations Summary</option>
-              <option>User Analytics</option>
-              <option>Device Performance</option>
-              <option>Financial Report</option>
-              <option>Incident Log</option>
+            <select
+              value={form.type}
+              onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
+              className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+            >
+              {overview.templates.map((t) => (
+                <option key={t.key} value={t.key}>{t.name}</option>
+              ))}
             </select>
           </div>
 
           <div>
             <label className="block text-gray-400 text-sm mb-2">Date Range</label>
-            <select className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500">
+            <select
+              value={form.periodLabel}
+              onChange={(e) => setForm((f) => ({ ...f, periodLabel: e.target.value }))}
+              className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+            >
               <option>Last 7 Days</option>
               <option>Last 30 Days</option>
               <option>Last 3 Months</option>
               <option>Last 6 Months</option>
               <option>Last Year</option>
-              <option>Custom Range</option>
             </select>
           </div>
 
           <div>
             <label className="block text-gray-400 text-sm mb-2">Format</label>
-            <select className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500">
-              <option>PDF</option>
-              <option>Excel (XLSX)</option>
-              <option>CSV</option>
-              <option>JSON</option>
+            <select
+              value={form.format}
+              onChange={(e) => setForm((f) => ({ ...f, format: e.target.value }))}
+              className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+            >
+              <option value="csv">CSV</option>
+              <option value="json">JSON</option>
             </select>
           </div>
         </div>
 
         <div className="mt-6 flex gap-3">
-          <button className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+          <button
+            onClick={() => generateReport(form)}
+            disabled={generating}
+            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg transition-colors"
+          >
             <Download size={20} />
-            Generate Report
+            {generating ? "Generating..." : "Generate Report"}
           </button>
           <button className="flex items-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors">
             <Calendar size={20} />
-            Schedule Report
+            Auto Templates Enabled
           </button>
         </div>
       </div>
@@ -234,7 +287,7 @@ const Reports = () => {
         </div>
 
         <div className="space-y-3">
-          {recentReports.map((report) => (
+          {overview.recentReports.map((report) => (
             <div
               key={report.id}
               className="flex items-center justify-between p-4 bg-slate-700/50 rounded-lg hover:bg-slate-700 transition-colors"
@@ -246,20 +299,23 @@ const Reports = () => {
                 <div>
                   <h3 className="text-white font-medium">{report.title}</h3>
                   <div className="flex items-center gap-4 mt-1">
-                    <span className="text-gray-400 text-sm">{report.type}</span>
+                    <span className="text-gray-400 text-sm">{report.report_type}</span>
                     <span className="text-gray-500 text-sm">•</span>
-                    <span className="text-gray-400 text-sm">{report.period}</span>
+                    <span className="text-gray-400 text-sm">{report.period_label}</span>
                     <span className="text-gray-500 text-sm">•</span>
-                    <span className="text-gray-400 text-sm">{report.size}</span>
+                    <span className="text-gray-400 text-sm">{toSize(report.size_bytes)}</span>
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center gap-3">
                 <span className="px-3 py-1 bg-slate-600 text-gray-300 rounded-full text-xs font-medium">
-                  {report.format}
+                  {String(report.format).toUpperCase()}
                 </span>
-                <button className="p-2 text-gray-400 hover:text-white transition-colors">
+                <button
+                  onClick={() => downloadExisting(report.id)}
+                  className="p-2 text-gray-400 hover:text-white transition-colors"
+                >
                   <Download size={20} />
                 </button>
               </div>

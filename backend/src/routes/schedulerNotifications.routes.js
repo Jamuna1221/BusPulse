@@ -1,5 +1,5 @@
 import express from "express";
-import { verifySchedulerToken } from "../middleware/auth.middleware.js";
+import { verifySchedulerOrAdmin } from "../middleware/auth.middleware.js";
 import {
   listSchedulerNotifications,
   confirmIncidentNotification,
@@ -9,9 +9,9 @@ import {
 
 const router = express.Router();
 
-router.get("/", verifySchedulerToken, listSchedulerNotifications);
-router.post("/incident/:incidentId/confirm", verifySchedulerToken, confirmIncidentNotification);
-router.post("/incident/:incidentId/resolve", verifySchedulerToken, resolveIncidentNotification);
-router.post("/delay/:serviceId/confirm", verifySchedulerToken, confirmDelayNotification);
+router.get("/", verifySchedulerOrAdmin, listSchedulerNotifications);
+router.post("/incident/:incidentId/confirm", verifySchedulerOrAdmin, confirmIncidentNotification);
+router.post("/incident/:incidentId/resolve", verifySchedulerOrAdmin, resolveIncidentNotification);
+router.post("/delay/:serviceId/confirm", verifySchedulerOrAdmin, confirmDelayNotification);
 
 export default router;

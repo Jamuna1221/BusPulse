@@ -6,12 +6,11 @@ import {
   updateRoute,
   deleteRoute,
 } from "../controllers/schedulerRoute.controller.js";
-import { verifySchedulerToken } from "../middleware/auth.middleware.js";
+import { verifySchedulerOrAdmin } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-// All route management endpoints require scheduler authentication
-router.use(verifySchedulerToken);
+router.use(verifySchedulerOrAdmin);
 
 // GET    /api/scheduler/routes          - List all routes (?search= &isActive=)
 router.get("/", getAllRoutes);

@@ -51,6 +51,7 @@ import Feedback from "./pages/admin/Feedback";
 import Reports from "./pages/admin/Reports";
 import Settings from "./pages/admin/Settings";
 import BusSchedulers from "./pages/admin/busSchedulers";
+import AdminUserActivity from "./pages/admin/UserActivity";
 import VerifyEmail from "./pages/VerifyEmail";
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
@@ -128,7 +129,8 @@ function App() {
           >
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="users" element={<Users />} />
-            <Route path="/admin/schedulers" element={<BusSchedulers />} />
+            <Route path="users/:userId/activity" element={<AdminUserActivity />} />
+            <Route path="schedulers" element={<BusSchedulers />} />
             <Route path="devices" element={<Devices />} />
             <Route path="bus-management" element={<BusManagement />} />
             <Route path="analytics" element={<Analytics />} />
@@ -137,6 +139,15 @@ function App() {
             <Route path="feedback" element={<Feedback />} />
             <Route path="reports" element={<Reports />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="ops/dashboard" element={<SchedulerDashboard />} />
+            <Route path="ops/buses" element={<SchedulerBusManagement />} />
+            <Route path="ops/routes" element={<SchedulerRouteManagement />} />
+            <Route path="ops/schedules" element={<ScheduleManagement />} />
+            <Route path="ops/drivers" element={<DriverManagement />} />
+            <Route path="ops/reports" element={<ReportsAnalytics />} />
+            <Route path="ops/notifications" element={<SchedulerNotifications />} />
+            <Route path="ops/activity" element={<ActivityLogs />} />
+            <Route path="ops/search" element={<SchedulerSearchPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

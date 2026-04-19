@@ -590,18 +590,51 @@ export default function UpcomingBuses({ location, onChangeLocation }) {
 
   return (
     <>
-      <div className="bp-root" style={{ minHeight: "100vh", background: "#f9fafb", padding: "24px 16px 40px", display: "flex", justifyContent: "center" }}>
-        <div style={{ width: "100%", maxWidth: 440 }}>
+      <div
+        className="bp-root"
+        style={{
+          minHeight: "100vh",
+          padding: "24px 16px 40px",
+          display: "flex",
+          justifyContent: "center",
+          position: "relative",
+          backgroundImage: "url('/map-bg.png')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "rgba(255,255,255,0.34)",
+            backdropFilter: "blur(2px)",
+          }}
+        />
+        <div
+          style={{
+            width: "100%",
+            maxWidth: 460,
+            position: "relative",
+            zIndex: 1,
+            background: "rgba(255,255,255,0.80)",
+            border: "1px solid rgba(255,255,255,0.75)",
+            boxShadow: "0 10px 35px rgba(15,23,42,0.18)",
+            backdropFilter: "blur(8px)",
+            borderRadius: 22,
+            padding: "16px 14px 18px",
+          }}
+        >
 
           {/* Header */}
           <div style={{ marginBottom: 24, animation: "bp-fade-up 0.4s ease both" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
               <span style={{ fontSize: 26 }}>🚌</span>
-              <h2 style={{ fontSize: 24, fontWeight: 700, color: "#111827", margin: 0 }}>Buses near you</h2>
+              <h2 style={{ fontSize: 28, fontWeight: 800, color: "#111827", margin: 0, letterSpacing: "-0.02em" }}>Buses near you</h2>
             </div>
             <p style={{ fontSize: 13, color: "#9ca3af", margin: "0 0 16px", display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "#10b981" }} />
-              <span>Near <b style={{ color: "#374151" }}>{areaName}</b> · next 60 min</span>
+              <span>Near <b style={{ color: "#111827" }}>{areaName}</b> · next 60 min</span>
             </p>
 
             {/* Destination search */}
@@ -656,12 +689,12 @@ export default function UpcomingBuses({ location, onChangeLocation }) {
             </div>
 
             {selectedDestination && (
-              <div style={{ background: "#d1fae5", borderRadius: 10, padding: "7px 12px", fontSize: 12, color: "#065f46", fontWeight: 500, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ background: "#d1fae5", border: "1px solid #86efac", borderRadius: 10, padding: "7px 12px", fontSize: 12, color: "#065f46", fontWeight: 600, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
                 <span>✅</span> Showing buses towards <b>{selectedDestination.name}</b>
               </div>
             )}
             {selectedDestination && buses.some(b => b.recommendationType === "TRANSFER_SUGGESTION") && (
-              <div style={{ background: "#fffbeb", borderRadius: 10, padding: "7px 12px", fontSize: 12, color: "#92400e", fontWeight: 500, display: "flex", gap: 6 }}>
+              <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, padding: "7px 12px", fontSize: 12, color: "#92400e", fontWeight: 600, display: "flex", gap: 6 }}>
                 <span>🔄</span> No direct bus. Showing transfer options.
               </div>
             )}

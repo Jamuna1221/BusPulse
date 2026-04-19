@@ -1,65 +1,54 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { MessageSquare, Search, Star, ThumbsUp, ThumbsDown, Filter, CheckCircle, Clock, X } from 'lucide-react';
+import { adminFeedbackAPI } from "../../config/api";
 
 const Feedback = () => {
-  const [feedbacks, setFeedbacks] = useState([
-    {
-      id: 1,
-      type: 'complaint',
-      user: 'Priya Sharma',
-      email: 'priya.s@example.com',
-      subject: 'Bus delayed by 45 minutes',
-      message: 'Bus 23 was severely delayed today morning. I missed my important meeting. Please improve timing accuracy.',
-      busNumber: 'Bus 23',
-      route: 'Route A',
-      status: 'open',
-      rating: 1,
-      submittedAt: '2024-02-07 09:30 AM',
-      priority: 'high',
-    },
-    {
-      id: 2,
-      type: 'suggestion',
-      user: 'Arun Kumar',
-      email: 'arun.k@example.com',
-      subject: 'Add real-time occupancy feature',
-      message: 'It would be great if the app could show how crowded each bus is before boarding.',
-      busNumber: 'N/A',
-      route: 'N/A',
-      status: 'in-progress',
-      rating: 4,
-      submittedAt: '2024-02-07 10:15 AM',
-      priority: 'medium',
-    },
-    {
-      id: 3,
-      type: 'praise',
-      user: 'Lakshmi Iyer',
-      email: 'lakshmi.i@example.com',
-      subject: 'Excellent service',
-      message: 'The driver of Bus 45 was very courteous and helpful. Great experience!',
-      busNumber: 'Bus 45',
-      route: 'Route B',
-      status: 'resolved',
-      rating: 5,
-      submittedAt: '2024-02-06 02:20 PM',
-      priority: 'low',
-    },
-    {
-      id: 4,
-      type: 'complaint',
-      user: 'Rahul Verma',
-      email: 'rahul.v@example.com',
-      subject: 'App not showing live location',
-      message: 'The GPS tracking seems to be broken. Bus location not updating for the last 2 hours.',
-      busNumber: 'Bus 12',
-      route: 'Route C',
-      status: 'open',
-      rating: 2,
-      submittedAt: '2024-02-07 11:00 AM',
-      priority: 'high',
-    },
-  ]);
+  const [feedbacks, setFeedbacks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+
+  const loadFeedbacks = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const res = await adminFeedbackAPI.getAll({ limit: 400, search, type: typeFilter });
+      setFeedbacks((res.data || []).map((f) => ({
+        ...f,
+        submittedAt: new Date(f.submittedAt).toLocaleString(),
+      })));
+    } catch (e) {
+      setError(e.message || "Failed to load feedback.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const t = setTimeout(loadFeedbacks, 250);
+    return () => clearTimeout(t);
+  }, [search, typeFilter]);
+
+  const stats = useMemo(() => {
+    const total = feedbacks.length;
+    const open = feedbacks.filter((f) => f.status === "open").length;
+    const resolved = feedbacks.filter((f) => f.status === "resolved").length;
+    const avgRating = total > 0
+      ? (feedbacks.reduce((s, f) => s + (Number(f.rating) || 0), 0) / total).toFixed(1)
+      : "0.0";
+    const resolutionRate = total > 0 ? Math.round((resolved / total) * 100) : 0;
+    return { total, open, avgRating, resolutionRate };
+  }, [feedbacks]);
+
+  const updateStatus = async (feedback, status) => {
+    try {
+      await adminFeedbackAPI.updateStatus(feedback.id, status, feedback.priority);
+      await loadFeedbacks();
+    } catch (e) {
+      setError(e.message || "Failed to update feedback.");
+    }
+  };
 
   const getTypeColor = (type) => {
     switch (type) {
@@ -117,7 +106,7 @@ const Feedback = () => {
             <p className="text-gray-400 text-sm">Total Feedback</p>
             <MessageSquare className="text-blue-400" size={24} />
           </div>
-          <p className="text-3xl font-bold text-white">342</p>
+          <p className="text-3xl font-bold text-white">{stats.total}</p>
           <p className="text-gray-400 text-sm mt-2">This month</p>
         </div>
 
@@ -126,7 +115,7 @@ const Feedback = () => {
             <p className="text-gray-400 text-sm">Open Issues</p>
             <Clock className="text-red-400" size={24} />
           </div>
-          <p className="text-3xl font-bold text-red-400">23</p>
+          <p className="text-3xl font-bold text-red-400">{stats.open}</p>
           <p className="text-gray-400 text-sm mt-2">Needs response</p>
         </div>
 
@@ -135,7 +124,7 @@ const Feedback = () => {
             <p className="text-gray-400 text-sm">Avg Rating</p>
             <Star className="text-yellow-400 fill-yellow-400" size={24} />
           </div>
-          <p className="text-3xl font-bold text-white">4.2</p>
+          <p className="text-3xl font-bold text-white">{stats.avgRating}</p>
           <p className="text-gray-400 text-sm mt-2">Out of 5.0</p>
         </div>
 
@@ -144,7 +133,7 @@ const Feedback = () => {
             <p className="text-gray-400 text-sm">Resolution Rate</p>
             <CheckCircle className="text-green-400" size={24} />
           </div>
-          <p className="text-3xl font-bold text-green-400">87%</p>
+          <p className="text-3xl font-bold text-green-400">{stats.resolutionRate}%</p>
           <p className="text-gray-400 text-sm mt-2">Within 24 hours</p>
         </div>
       </div>
@@ -157,18 +146,32 @@ const Feedback = () => {
             <input
               type="text"
               placeholder="Search by user, subject, or bus number..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
             />
           </div>
-          <button className="flex items-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors">
+          <button className="flex items-center gap-2 px-6 py-3 bg-slate-700 text-white rounded-lg">
             <Filter size={20} />
             Filter by Type
           </button>
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
+          >
+            <option value="all">All</option>
+            <option value="complaint">Complaint</option>
+            <option value="suggestion">Suggestion</option>
+            <option value="praise">Praise</option>
+          </select>
         </div>
       </div>
 
       {/* Feedback Cards */}
       <div className="space-y-4">
+        {loading && <div className="text-gray-400 text-sm">Loading feedback...</div>}
+        {!loading && error && <div className="text-red-400 text-sm">{error}</div>}
         {feedbacks.map((feedback) => (
           <div key={feedback.id} className="bg-slate-800 rounded-xl border border-slate-700 p-6 hover:border-slate-600 transition-all">
             {/* Header */}
@@ -239,20 +242,20 @@ const Feedback = () => {
             <div className="flex gap-2 pt-4 border-t border-slate-700">
               {feedback.status === 'open' && (
                 <>
-                  <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm">
+                  <button onClick={() => updateStatus(feedback, "in-progress")} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm">
                     Respond
                   </button>
-                  <button className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm">
+                  <button onClick={() => updateStatus(feedback, "resolved")} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm">
                     Mark as Resolved
                   </button>
                 </>
               )}
               {feedback.status === 'in-progress' && (
                 <>
-                  <button className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm">
+                  <button onClick={() => updateStatus(feedback, "resolved")} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm">
                     Mark as Resolved
                   </button>
-                  <button className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-sm">
+                  <button onClick={() => updateStatus(feedback, "in-progress")} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-sm">
                     Add Note
                   </button>
                 </>

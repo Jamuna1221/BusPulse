@@ -1,6 +1,419 @@
 openbuildings donwload
 
-Geocoding: "Tirunelveli Junction"...
-✅ Geocoded "Tirunelveli Junction": 8.7312234, 77.708336
-🗺️  Fetching OSRM geometry for route 482...
-❌ OSRM error for route 482: null value in column "distance_km" of relation "route_geometry" violates not-null constraint   do this also , and crt the thing like if i add new route it hase ot run succexfully
+Here is the complete documentation for Module 4.5.3:
+
+---
+
+# 4.5.3 — Arrival Prediction and Confidence Scoring Module (Complete Detail)
+
+---
+
+## 📌 Overview
+
+This is the **core engine of BusPulse** — the most technically complex module. It predicts bus arrival times for passengers **without any GPS hardware**, using only:
+- Bus departure schedules (stored in DB)
+- Pre-fetched OSRM road geometry (JSONB coordinate arrays)
+- A **realistic speed model** (18 km/h average + stop dwell time)
+- The **Haversine formula** for geographic distance calculation
+
+It runs on every passenger query and produces an ETA, a confidence level, and a bus status — all in real time.
+
+---
+
+## 🗂️ Complete File List
+
+| File | Layer | Purpose |
+|------|-------|---------|
+| `upcomingBusesController.js` | Controller | HTTP entry point — validates request, delegates to service |
+| `upcomingBusesService.js` | Service | Main pipeline — fetch → filter → ETA → sort → return |
+| `etaService.js` | Service | Core ETA algorithm — calculates arrival minutes + confidence + status |
+| `routeMatcher.js` | Service | Proximity filter — checks if route passes within 2 km of user |
+| `distanceService.js` | Service | Haversine formula + closest-point-on-route finder |
+| `segmentService.js` | Service | (Early prototype) Segment-based speed factor builder via OSRM |
+| `serviceRepository.js` | Repository | SQL query — fetches all relevant services from DB |
+| `busRoutes.js` | Routes | API endpoint definitions |
+| `UpcomingBuses.jsx` | Frontend | Passenger-facing UI — bus cards, map, feedback |
+
+---
+
+## 🔗 API Endpoint
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/buses/upcoming` | Main prediction endpoint — returns ETAs for buses near user |
+| `GET` | `/api/buses/health` | Health check |
+
+### Request Body
+```json
+{
+  "lat": 9.1752,
+  "lng": 77.4287,
+  "maxMinutes": 60,
+  "grouped": false,
+  "detailed": false,
+  "destinationLat": 9.9252,
+  "destinationLng": 78.1198,
+  "destinationName": "Madurai",
+  "destinationId": "abc123"
+}
+```
+
+### Response Fields Per Bus
+| Field | Description |
+|-------|-------------|
+| `serviceId` | Unique service ID |
+| `routeId` | Route reference |
+| `routeNo` | Bus number (e.g., `R-106`) |
+| `from` / `to` | Origin and destination place names |
+| `departureTime` | Scheduled departure time (`HH:MM`) |
+| `eta` | Minutes until bus arrives at user location |
+| `distance` | User's perpendicular distance from route (in metres) |
+| `status` | `NEARBY` / `APPROACHING` / `EN_ROUTE` / `NOT_DEPARTED` / `PASSED` |
+| `confidence` | `HIGH` / `MEDIUM` / `LOW` |
+| `liveStatus` | Crowdsourced live status (if any feedback exists) |
+| `delayMinutes` | Extra delay added from crowd reports |
+| `confidenceScore` | Numeric score (0–100) from crowdsourcing engine |
+| `crowdLevel` | `HIGH` / `MEDIUM` / `LOW` |
+| `schedulerVerified` | Boolean — true if scheduler confirmed the status |
+| `reportCount` | Number of user reports for this service |
+| `recommendationType` | `DIRECT` or `TRANSFER_SUGGESTION` |
+| `recommendationNote` | Transfer instruction text if no direct bus |
+| `routeGeometry` | JSONB array of `{lat, lng}` — used for map tracking |
+
+---
+
+## ⚙️ The 5-Step Prediction Pipeline (`upcomingBusesService.js`)
+
+### Step 1 — Fetch Candidate Services from Database
+
+```sql
+SELECT s.id, s.departure_time, r.route_no, fp.lat, fp.lng, tp.lat, tp.lng,
+       rg.geometry AS route_geometry
+FROM services s
+JOIN routes r  ON s.route_id = r.id
+JOIN places fp ON r.from_place_id = fp.id
+JOIN places tp ON r.to_place_id   = tp.id
+LEFT JOIN route_geometry rg ON rg.route_id = r.id
+WHERE departure_time BETWEEN (now - 180min) AND (now + 60min)
+ORDER BY departure_time
+```
+
+**Two time windows are fetched:**
+
+| Window | Why |
+|--------|-----|
+| **Past 3 hours** (en-route buses) | A bus that departed 2 hrs ago may still be traveling and may pass the user |
+| **Next 60 minutes** (upcoming buses) | Buses that haven't left yet but are near the departure city |
+
+> 🔑 This dual-window approach was a critical fix. Earlier versions only looked forward and missed all currently-running buses.
+
+---
+
+### Step 2 — Route Proximity Filter (`routeMatcher.js`)
+
+For each fetched service, the system checks: **"Does this bus route pass within 2 km (2000 metres) of the user?"**
+
+**Algorithm:**
+```
+For every {lat, lng} point in route_geometry:
+    dist = haversineDistance(userLat, userLng, point.lat, point.lng)
+    if dist <= 2000 metres → route is NEAR the user → KEEP
+```
+
+Routes with no geometry or routes that don't come within 2 km are **discarded immediately**.
+
+- Default threshold: **2000 metres** (configurable via `config.eta.proximityThresholdMeters`)
+
+---
+
+### Step 3 — ETA Calculation (`etaService.js`) ← Core Algorithm
+
+This is the heart of the module. For each nearby service, it calculates:
+
+#### A. Time Parsing
+```
+currentMinutes   = HH * 60 + MM  (current system time)
+departureMinutes = HH * 60 + MM  (bus departure_time from DB)
+elapsedMinutes   = currentMinutes - departureMinutes
+```
+
+#### B. Cumulative Distance Array (`buildCumulativeDistances`)
+Using the JSONB route geometry (array of `{lat, lng}` points), a cumulative distance array is built:
+```
+cumDist[0] = 0
+cumDist[i] = cumDist[i-1] + haversine(point[i-1], point[i]) in km
+totalRouteKm = cumDist[last]
+```
+This allows mapping **any distance traveled → an index on the route geometry**.
+
+#### C. Speed & Stop Model (Realistic Bus Constants)
+
+| Constant | Value | Rationale |
+|----------|-------|-----------|
+| `AVG_SPEED_KMPH` | **18 km/h** | Tamil Nadu rural bus average (not car speed) |
+| `AVG_SPEED_KM_PER_MIN` | **0.3 km/min** | Derived from 18/60 |
+| `STOP_INTERVAL_KM` | **5 km** | One stop every ~5 km on rural routes |
+| `STOP_DWELL_MIN` | **2 min** | Boarding/alighting time per stop |
+| `ROUTE_PROXIMITY_M` | **2000 m** | Max distance user can be from route geometry |
+
+> ⚠️ The old code used 24 km/h with zero stops — this underestimated travel time by 30–40%. Example: Kovilpatti → Nalattinputhur (28 km): **Old = 52 min (wrong), New = 77 min (realistic)**.
+
+```javascript
+function busTravelTime(distanceKm) {
+  const travelMin = distanceKm / AVG_SPEED_KM_PER_MIN;
+  const stopCount = Math.floor(distanceKm / STOP_INTERVAL_KM);
+  const stopMin   = stopCount * STOP_DWELL_MIN;
+  return travelMin + stopMin;
+}
+```
+
+#### D. Two Main Cases
+
+**Case 1: Bus has NOT departed yet** (`elapsedMinutes < 0`)
+
+```
+minutesUntilDeparture = |elapsedMinutes|
+distToOrigin = haversine(userLocation, departureCity)
+
+If distToOrigin > 2000 m:
+    → NOT_YET_RELEVANT (user is not near departure city)
+
+If distToOrigin ≤ 2000 m:
+    → etaMinutes = minutesUntilDeparture
+    → status = NOT_DEPARTED
+    → confidence = HIGH
+```
+
+**Case 2: Bus is EN ROUTE** (`elapsedMinutes >= 0`)
+
+```
+1. Estimate how far the bus has traveled:
+   totalStops = floor(totalRouteKm / STOP_INTERVAL_KM)
+   stopsAlreadyMade = floor((elapsedMinutes / busTravelTime(totalRoute)) * totalStops)
+   netTravelMinutes = elapsedMinutes - (stopsAlreadyMade × 2)
+   distanceTraveledKm = max(0, netTravelMinutes × 0.3)
+
+2. If distanceTraveledKm >= totalRouteKm:
+   → status = COMPLETED (bus journey over)
+
+3. Find bus's current geometry index:
+   busIndex = index where cumDist[busIndex] ≈ distanceTraveledKm
+
+4. Find user's closest point on route:
+   {distance: distToRoute, index: userIndex} = findClosestPointOnRoute(user, geometry)
+   userDistFromStart = cumDist[userIndex]
+
+5. If bus already passed user (busDistFromStart >= userDistFromStart):
+   → status = PASSED
+
+6. If user too far from route (distToRoute > 2000 m):
+   → status = TOO_FAR_FROM_ROUTE
+
+7. Calculate remaining distance and ETA:
+   remainingKm = userDistFromStart - busDistFromStart
+   etaMinutes  = round(busTravelTime(remainingKm))
+```
+
+---
+
+### Step 4 — Confidence Scoring
+
+Confidence is determined by **how far the user is perpendicular from the nearest route geometry point** (`distToRoute`):
+
+| Distance to Route | Confidence Level | Meaning |
+|-------------------|-----------------|---------|
+| `< 500 metres` | **HIGH** | User is very close to route |
+| `500 – 1000 metres` | **MEDIUM** | User is moderately close to route |
+| `> 1000 metres` | **LOW** | User is far from route |
+
+---
+
+### Step 5 — Status Assignment and Sorting
+
+#### Bus Status Labels
+
+| Status | Condition | Meaning |
+|--------|-----------|---------|
+| `NOT_DEPARTED` | `elapsedMinutes < 0`, user near origin | Bus hasn't left yet — countdown shown |
+| `NEARBY` | `etaMinutes <= 5` | Bus arriving within 5 minutes |
+| `APPROACHING` | `etaMinutes 6–15` | Bus arriving in 6–15 minutes |
+| `EN_ROUTE` | `etaMinutes > 15` | Bus is on the way but further away |
+| `PASSED` | `busDistFromStart >= userDistFromStart` | Bus has already gone past user |
+| `COMPLETED` | `distanceTraveled >= totalRoute` | Bus has finished its journey |
+
+#### After ETA Calculation:
+- **Filter**: Only keep buses with `etaMinutes <= 30` (for normal view) or `<= maxMinutes` (for destination mode)
+- **Sort**: Results are sorted by `etaMinutes` ascending (soonest bus first)
+
+---
+
+## 🗺️ Destination Mode & Transfer Suggestions (`upcomingBusesService.js`)
+
+When the passenger specifies a **destination**, the engine adds an extra routing layer:
+
+```
+For each bus:
+  1. Find user's index on route geometry         → userOnRoute.index
+  2. Find destination's index on route geometry  → destinationOnRoute.index
+  3. isDirect = destination is AHEAD of user on route AND within 800m of route
+
+If any direct bus found → show only direct buses ✅
+
+If no direct bus:
+  Transfer logic:
+    improvementMeters = dist(user→dest) - dist(routeEnd→dest)
+    isTransferCandidate = route brings them meaningfully CLOSER to destination
+    (improvement ≥ 1000m AND routeEnd within 5000m of destination)
+  → Show transfer suggestions sorted by how close they get to destination
+  → Add recommendationNote: "Take this bus to X, then board another to Y"
+```
+
+---
+
+## 📐 Core Algorithm: `distanceService.js`
+
+### 1. Haversine Formula (`distanceMeters`)
+Calculates straight-line distance between two GPS coordinates:
+```
+R = 6,371,000 metres (Earth's radius)
+dLat = toRad(lat2 - lat1)
+dLng = toRad(lng2 - lng1)
+a = sin²(dLat/2) + cos(lat1) × cos(lat2) × sin²(dLng/2)
+c = 2 × atan2(√a, √(1−a))
+distance = R × c   (in metres)
+```
+
+### 2. Closest Point on Route (`findClosestPointOnRoute`)
+Iterates through every geometry point and finds the one with the **minimum Haversine distance** from the user:
+```
+For i = 0 to routePoints.length:
+    dist = haversine(user, routePoints[i])
+    if dist < minDist → update minDist, closestIndex, closestPoint
+
+Returns: { distance, index, point }
+```
+This index is then used to determine the user's **position ratio** on the cumulative distance array.
+
+---
+
+## 🖥️ Frontend — `UpcomingBuses.jsx`
+
+### Features
+
+#### Bus Cards (`BusCard` component)
+Each bus card displays:
+- **Route number** (monospace font — e.g., `R-106`)
+- **LIVE badge** (pulsing dot — shown if crowdsource live status exists)
+- **From → To** route label
+- **ETA** (large bold number, formatted as `X min` or `Xh Ym`)
+- **Status badge** (color-coded: green=NEARBY, blue=NOT_DEPARTED, etc.)
+- **Confidence** label (`HIGH confidence` / `MEDIUM confidence` / `LOW confidence`)
+- **Distance** from route (e.g., `· 450m away`)
+- **Delay minutes** if crowd-reported (e.g., `+10 min delay`)
+- **Confidence score %** from crowdsourcing (e.g., `72% confidence`)
+- **Report count** (e.g., `3 reports`)
+- **Transfer note** if no direct bus (🔄 with instruction)
+- **Track → button** to open the live map modal
+
+#### Status Badge Color Mapping
+
+| Status | Badge Color |
+|--------|------------|
+| `NEARBY` | 🟢 Green |
+| `APPROACHING` | 🟩 Light Green |
+| `NOT_DEPARTED` | 🔵 Blue |
+| `SERVICE_DISRUPTED` / `LIKELY_DELAYED` / `CONFIRMED_DELAY` | ⚫ Grey |
+| Default (`EN_ROUTE`) | ⚫ Grey |
+
+#### Confidence Color Mapping
+
+| Level | Color |
+|-------|-------|
+| `HIGH` | 🟢 Green (`#16a34a`) |
+| `MEDIUM` | 🟡 Amber (`#d97706`) |
+| `LOW` | 🔴 Red (`#dc2626`) |
+
+---
+
+### Destination Search
+- Search box with **250ms debounced** Nominatim API call
+- Filters results to **Tamil Nadu, India** only
+- Falls back to India-wide search if TN has no results
+- Once destination is selected, re-fetches buses with destination filter
+- Shows: "✅ Showing buses towards **X**" or "🔄 No direct bus. Showing transfer options."
+
+---
+
+### Live Map (`TrackMap` component)
+
+When a passenger clicks **Track →**:
+- **Leaflet.js** map is dynamically loaded (lazy CDN injection)
+- Draws:
+  - 🟢 Green polyline = full route path
+  - 🟢 Green circle marker = origin city
+  - 🔴 Red circle marker = destination city
+  - 🔵 Blue dot = **user's current location**
+  - 🚌 Yellow bus marker = **estimated bus position**
+- Bus position is recalculated using the **same 18 km/h model** as the backend
+- Position updates automatically **every 10 seconds** via `setInterval`
+- Disclaimer shown: *"Simulated position. Estimated from departure time & avg speed — not real-time GPS."*
+
+---
+
+### Auto-Refresh
+- **Automatic refresh every 30 seconds** (via `setInterval`) — ETAs stay current
+- Manual "↻ Refresh Buses" button also available
+- **Activity logging** — each search is logged to the user's activity history (`/api/user/activity/log`) with: `fromLat`, `fromLng`, `fromLabel`, `toPlaceId`, `toPlaceName`, `busesFound`
+- De-duplicated logging — same search within 15 seconds is not re-logged
+
+---
+
+### Loading State
+- **Shimmer skeleton cards** shown while fetching (3 animated placeholder cards with shimmer effect)
+- Smooth `bp-fade-up` animation when cards appear
+
+---
+
+## 📁 Complete File Detail Summary
+
+| File | Key Functions |
+|------|---------------|
+| `upcomingBusesController.js` | `getUpcomingBuses()`, `healthCheck()` |
+| `upcomingBusesService.js` | `getUpcomingBusesNearUser()`, `getUpcomingBusesDetailed()`, `getUpcomingBusesGroupedByStatus()` |
+| `etaService.js` | `calculateETA()`, `calculateETAsForServices()`, `busTravelTime()`, `buildCumulativeDistances()` |
+| `routeMatcher.js` | `isUserNearRoute()`, `getRouteProximity()` |
+| `distanceService.js` | `distanceMeters()`, `findClosestPointOnRoute()` |
+| `serviceRepository.js` | `getUpcomingServices()` ← dual-window SQL query |
+| `UpcomingBuses.jsx` | `BusCard`, `TrackMap`, `TrackModal`, `SkeletonCard`, `estimateBusPosition()` |
+
+---
+
+## 🔄 End-to-End Flow Summary
+
+```
+Passenger opens app
+       ↓
+POST /api/buses/upcoming { lat, lng }
+       ↓
+Step 1: SQL fetches services (departed in last 3h OR departing in next 60min)
+       ↓
+Step 2: routeMatcher → filter to routes passing within 2km of user
+       ↓
+Step 3: etaService.calculateETA()
+        → Build cumulative geometry distances
+        → Case A: Bus not departed → countdown
+        → Case B: Bus en route → estimate position → find remaining km → busTravelTime()
+       ↓
+Step 4: Assign confidence (HIGH/MEDIUM/LOW) based on distToRoute
+        Assign status (NEARBY/APPROACHING/EN_ROUTE/NOT_DEPARTED/PASSED)
+       ↓
+Step 5: Filter (only ETA ≤ 30 min), sort ascending
+        Merge live crowd status (from busLiveStatus table)
+        Apply delay adjustments if crowd-reported
+       ↓
+Return JSON → Frontend renders BusCards + Track map
+       ↓
+Auto-refresh every 30 seconds
+```
+
+This module is the **unique non-GPS ETA prediction system** that distinguishes BusPulse from conventional tracking solutions.

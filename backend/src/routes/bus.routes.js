@@ -6,12 +6,12 @@ import {
   updateBus,
   deleteBus,
 } from "../controllers/bus.controller.js";
-import { verifySchedulerToken } from "../middleware/auth.middleware.js";
+import { verifySchedulerOrAdmin } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-// All bus management routes require scheduler authentication
-router.use(verifySchedulerToken);
+// Scheduler or admin (operations tooling)
+router.use(verifySchedulerOrAdmin);
 
 // GET  /api/scheduler/buses         - List all buses (supports ?status= and ?search=)
 router.get("/", getAllBuses);

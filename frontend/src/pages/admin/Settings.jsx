@@ -1,6 +1,119 @@
-import { Settings as SettingsIcon, User, Bell, Shield, Database, Globe, Palette, Key } from 'lucide-react';
+import { useEffect, useState } from "react";
+import { Settings as SettingsIcon, User, Bell, Shield, Database, Key, Loader2 } from "lucide-react";
+import { adminSettingsAPI } from "../../config/api";
 
 const Settings = () => {
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [message, setMessage] = useState({ type: "", text: "" });
+  const [profile, setProfile] = useState({
+    name: "",
+    email: "",
+    phone: "",
+  });
+  const [passwords, setPasswords] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+
+  useEffect(() => {
+    let mounted = true;
+    setLoadingProfile(true);
+    adminSettingsAPI
+      .getMe()
+      .then((res) => {
+        if (!mounted) return;
+        const data = res?.data || {};
+        setProfile({
+          name: data.name || "",
+          email: data.email || "",
+          phone: data.phone || "",
+        });
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setMessage({
+          type: "error",
+          text: err.message || "Failed to load admin profile",
+        });
+      })
+      .finally(() => {
+        if (mounted) setLoadingProfile(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleSaveProfile = async () => {
+    if (!profile.name.trim()) {
+      setMessage({ type: "error", text: "Name is required" });
+      return;
+    }
+    setSavingProfile(true);
+    setMessage({ type: "", text: "" });
+    try {
+      const res = await adminSettingsAPI.updateMe({
+        name: profile.name.trim(),
+        phone: profile.phone.trim(),
+      });
+      const data = res?.data || {};
+      setProfile((prev) => ({
+        ...prev,
+        name: data.name || prev.name,
+        phone: data.phone || "",
+      }));
+      setMessage({ type: "success", text: "Profile updated successfully" });
+    } catch (err) {
+      setMessage({
+        type: "error",
+        text: err.message || "Failed to update profile",
+      });
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleUpdatePassword = async () => {
+    if (!passwords.currentPassword || !passwords.newPassword || !passwords.confirmPassword) {
+      setMessage({ type: "error", text: "Please fill all password fields" });
+      return;
+    }
+    if (passwords.newPassword.length < 6) {
+      setMessage({ type: "error", text: "New password must be at least 6 characters" });
+      return;
+    }
+    if (passwords.newPassword !== passwords.confirmPassword) {
+      setMessage({ type: "error", text: "New password and confirm password do not match" });
+      return;
+    }
+
+    setSavingPassword(true);
+    setMessage({ type: "", text: "" });
+    try {
+      await adminSettingsAPI.changePassword({
+        currentPassword: passwords.currentPassword,
+        newPassword: passwords.newPassword,
+      });
+      setPasswords({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+      setMessage({ type: "success", text: "Password changed successfully" });
+    } catch (err) {
+      setMessage({
+        type: "error",
+        text: err.message || "Failed to change password",
+      });
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -8,6 +121,18 @@ const Settings = () => {
         <h1 className="text-3xl font-bold text-white">Settings</h1>
         <p className="text-gray-400 mt-1">Manage system preferences and configurations</p>
       </div>
+
+      {message.text && (
+        <div
+          className={`rounded-lg px-4 py-3 text-sm border ${
+            message.type === "success"
+              ? "bg-green-500/10 border-green-500/30 text-green-300"
+              : "bg-red-500/10 border-red-500/30 text-red-300"
+          }`}
+        >
+          {message.text}
+        </div>
+      )}
 
       {/* Settings Sections */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -28,7 +153,8 @@ const Settings = () => {
               <label className="block text-gray-400 text-sm mb-2">Full Name</label>
               <input
                 type="text"
-                defaultValue="Admin User"
+                value={profile.name}
+                onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
                 className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
               />
             </div>
@@ -37,8 +163,9 @@ const Settings = () => {
               <label className="block text-gray-400 text-sm mb-2">Email Address</label>
               <input
                 type="email"
-                defaultValue="admin@buspulse.com"
-                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                value={profile.email}
+                readOnly
+                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white/90 focus:outline-none"
               />
             </div>
 
@@ -46,13 +173,19 @@ const Settings = () => {
               <label className="block text-gray-400 text-sm mb-2">Phone Number</label>
               <input
                 type="tel"
-                defaultValue="+91 98765 43210"
+                value={profile.phone}
+                onChange={(e) => setProfile((p) => ({ ...p, phone: e.target.value }))}
                 className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
               />
             </div>
 
-            <button className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
-              Save Changes
+            <button
+              onClick={handleSaveProfile}
+              disabled={savingProfile || loadingProfile}
+              className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              {savingProfile ? <Loader2 size={16} className="animate-spin" /> : null}
+              {loadingProfile ? "Loading..." : "Save Changes"}
             </button>
           </div>
         </div>
@@ -75,6 +208,8 @@ const Settings = () => {
               <input
                 type="password"
                 placeholder="Enter current password"
+                value={passwords.currentPassword}
+                onChange={(e) => setPasswords((p) => ({ ...p, currentPassword: e.target.value }))}
                 className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
               />
             </div>
@@ -84,6 +219,8 @@ const Settings = () => {
               <input
                 type="password"
                 placeholder="Enter new password"
+                value={passwords.newPassword}
+                onChange={(e) => setPasswords((p) => ({ ...p, newPassword: e.target.value }))}
                 className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
               />
             </div>
@@ -93,6 +230,8 @@ const Settings = () => {
               <input
                 type="password"
                 placeholder="Confirm new password"
+                value={passwords.confirmPassword}
+                onChange={(e) => setPasswords((p) => ({ ...p, confirmPassword: e.target.value }))}
                 className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
               />
             </div>
@@ -108,7 +247,12 @@ const Settings = () => {
               </label>
             </div>
 
-            <button className="w-full px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors">
+            <button
+              onClick={handleUpdatePassword}
+              disabled={savingPassword}
+              className="w-full px-4 py-3 bg-red-600 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              {savingPassword ? <Loader2 size={16} className="animate-spin" /> : null}
               Update Password
             </button>
           </div>

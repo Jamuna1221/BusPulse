@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Search,
   Filter,
@@ -14,6 +15,7 @@ import {
 import { adminUsersAPI } from "../../config/api";
 
 const Users = () => {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [users, setUsers] = useState([]);
   const [activeMenu, setActiveMenu] = useState(null);
@@ -401,12 +403,12 @@ const Users = () => {
                               <div className="absolute right-0 top-8 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50">
                                 <button
                                   onClick={() => {
-                                    console.log("View user", u.id);
+                                    navigate(`/admin/users/${u.id}/activity`);
                                     setActiveMenu(null);
                                   }}
                                   className="block w-full text-left px-4 py-2.5 text-sm hover:bg-slate-700 text-gray-300 transition-colors rounded-t-lg"
                                 >
-                                  View Details
+                                  Activity & usage
                                 </button>
 
                                 <button

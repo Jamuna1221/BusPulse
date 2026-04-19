@@ -2,9 +2,18 @@ import { Menu, Bell, ChevronDown, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Logo from "../../assets/logoSep.png";
 
-const SchedulerNavbar = ({ onMenuClick }) => {
+const SchedulerNavbar = ({
+  onMenuClick,
+  basePath = "/scheduler",
+  panelLabel = "Scheduler",
+  profilePath,
+}) => {
   const navigate = useNavigate();
-  const schedulerName = localStorage.getItem("schedulerName") || "Scheduler";
+  const prof = profilePath ?? `${basePath}/profile`;
+  const schedulerName =
+    panelLabel === "Operations"
+      ? localStorage.getItem("adminEmail")?.split("@")[0] || "Admin"
+      : localStorage.getItem("schedulerName") || "Scheduler";
 
   return (
     <nav className="bg-slate-800 border-b border-slate-700 h-16 flex items-center justify-between px-6">
@@ -22,7 +31,7 @@ const SchedulerNavbar = ({ onMenuClick }) => {
           <div>
             <span className="text-white font-bold text-xl">BusPulse</span>
             <span className="text-green-400 text-xs font-medium ml-2 bg-green-400/10 px-2 py-0.5 rounded-full">
-              Scheduler
+              {panelLabel}
             </span>
           </div>
         </div>
@@ -32,7 +41,7 @@ const SchedulerNavbar = ({ onMenuClick }) => {
       <div className="flex items-center gap-4">
         {/* Quick Search */}
         <button
-          onClick={() => navigate("/scheduler/search")}
+          onClick={() => navigate(`${basePath}/search`)}
           className="text-gray-300 hover:text-white transition-colors p-2 hover:bg-slate-700 rounded-lg hidden md:block"
         >
           <Search size={20} />
@@ -40,7 +49,7 @@ const SchedulerNavbar = ({ onMenuClick }) => {
 
         {/* Notifications */}
         <button
-          onClick={() => navigate("/scheduler/notifications")}
+          onClick={() => navigate(`${basePath}/notifications`)}
           className="relative text-gray-300 hover:text-white transition-colors p-2 hover:bg-slate-700 rounded-lg"
         >
           <Bell size={20} />
@@ -49,7 +58,7 @@ const SchedulerNavbar = ({ onMenuClick }) => {
 
         {/* User Profile */}
         <div
-          onClick={() => navigate("/scheduler/profile")}
+          onClick={() => navigate(prof)}
           className="flex items-center gap-3 cursor-pointer hover:bg-slate-700 rounded-lg px-3 py-2 transition-colors"
         >
           <img

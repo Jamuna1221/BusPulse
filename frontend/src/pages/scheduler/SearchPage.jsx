@@ -1,34 +1,35 @@
 import { useState } from "react";
 import { Search, Bus, Map, Users, CalendarDays } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useOutletContext } from "react-router-dom";
 
+/** `link` is a path segment under the scheduler/ops base, e.g. `buses` → `${basePath}/buses` */
 const ALL_DATA = {
   buses: [
-    { id: "b1", label: "TN72-AB-1234", detail: "52 seats • Active • Kumar S.", link: "/scheduler/buses" },
-    { id: "b2", label: "TN72-CD-5678", detail: "40 seats • Active • Ravi M.", link: "/scheduler/buses" },
-    { id: "b3", label: "TN72-EF-9012", detail: "52 seats • Maintenance", link: "/scheduler/buses" },
-    { id: "b4", label: "TN72-GH-3456", detail: "36 seats • Active • Senthil R.", link: "/scheduler/buses" },
-    { id: "b5", label: "TN72-IJ-7890", detail: "52 seats • Inactive", link: "/scheduler/buses" },
-    { id: "b6", label: "TN72-KL-1122", detail: "48 seats • Active • Vijay P.", link: "/scheduler/buses" },
+    { id: "b1", label: "TN72-AB-1234", detail: "52 seats • Active • Kumar S.", link: "buses" },
+    { id: "b2", label: "TN72-CD-5678", detail: "40 seats • Active • Ravi M.", link: "buses" },
+    { id: "b3", label: "TN72-EF-9012", detail: "52 seats • Maintenance", link: "buses" },
+    { id: "b4", label: "TN72-GH-3456", detail: "36 seats • Active • Senthil R.", link: "buses" },
+    { id: "b5", label: "TN72-IJ-7890", detail: "52 seats • Inactive", link: "buses" },
+    { id: "b6", label: "TN72-KL-1122", detail: "48 seats • Active • Vijay P.", link: "buses" },
   ],
   routes: [
-    { id: "r1", label: "R-101: Madurai → Theni", detail: "76 km • 2h 15m • 2 stops", link: "/scheduler/routes" },
-    { id: "r2", label: "R-102: Theni → Bodinayakanur", detail: "30 km • 45m • 1 stop", link: "/scheduler/routes" },
-    { id: "r3", label: "R-103: Periyakulam → Madurai", detail: "95 km • 2h 45m • 2 stops", link: "/scheduler/routes" },
-    { id: "r4", label: "R-104: Cumbum → Theni", detail: "45 km • 1h 15m • 2 stops", link: "/scheduler/routes" },
-    { id: "r5", label: "R-105: Andipatti → Madurai", detail: "55 km • 1h 30m • 1 stop", link: "/scheduler/routes" },
+    { id: "r1", label: "R-101: Madurai → Theni", detail: "76 km • 2h 15m • 2 stops", link: "routes" },
+    { id: "r2", label: "R-102: Theni → Bodinayakanur", detail: "30 km • 45m • 1 stop", link: "routes" },
+    { id: "r3", label: "R-103: Periyakulam → Madurai", detail: "95 km • 2h 45m • 2 stops", link: "routes" },
+    { id: "r4", label: "R-104: Cumbum → Theni", detail: "45 km • 1h 15m • 2 stops", link: "routes" },
+    { id: "r5", label: "R-105: Andipatti → Madurai", detail: "55 km • 1h 30m • 1 stop", link: "routes" },
   ],
   drivers: [
-    { id: "d1", label: "Kumar S.", detail: "TN-DL-2020-1234 • Available", link: "/scheduler/drivers" },
-    { id: "d2", label: "Ravi M.", detail: "TN-DL-2019-5678 • On Trip", link: "/scheduler/drivers" },
-    { id: "d3", label: "Suresh K.", detail: "TN-DL-2021-9012 • Available", link: "/scheduler/drivers" },
-    { id: "d4", label: "Senthil R.", detail: "TN-DL-2018-3456 • On Trip", link: "/scheduler/drivers" },
-    { id: "d5", label: "Vijay P.", detail: "TN-DL-2022-7890 • Leave", link: "/scheduler/drivers" },
+    { id: "d1", label: "Kumar S.", detail: "TN-DL-2020-1234 • Available", link: "drivers" },
+    { id: "d2", label: "Ravi M.", detail: "TN-DL-2019-5678 • On Trip", link: "drivers" },
+    { id: "d3", label: "Suresh K.", detail: "TN-DL-2021-9012 • Available", link: "drivers" },
+    { id: "d4", label: "Senthil R.", detail: "TN-DL-2018-3456 • On Trip", link: "drivers" },
+    { id: "d5", label: "Vijay P.", detail: "TN-DL-2022-7890 • Leave", link: "drivers" },
   ],
   schedules: [
-    { id: "s1", label: "TN72-AB-1234 → Madurai → Theni", detail: "Feb 27, 06:30 AM • Kumar S.", link: "/scheduler/schedules" },
-    { id: "s2", label: "TN72-CD-5678 → Theni → Bodinayakanur", detail: "Feb 27, 07:00 AM • Ravi M.", link: "/scheduler/schedules" },
-    { id: "s3", label: "TN72-EF-9012 → Periyakulam → Madurai", detail: "Feb 27, 07:30 AM • Suresh K.", link: "/scheduler/schedules" },
+    { id: "s1", label: "TN72-AB-1234 → Madurai → Theni", detail: "Feb 27, 06:30 AM • Kumar S.", link: "schedules" },
+    { id: "s2", label: "TN72-CD-5678 → Theni → Bodinayakanur", detail: "Feb 27, 07:00 AM • Ravi M.", link: "schedules" },
+    { id: "s3", label: "TN72-EF-9012 → Periyakulam → Madurai", detail: "Feb 27, 07:30 AM • Suresh K.", link: "schedules" },
   ],
 };
 
@@ -42,6 +43,11 @@ const categoryConfig = {
 const SearchPage = () => {
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
+  const location = useLocation();
+  const ctx = useOutletContext();
+  const basePath =
+    ctx?.basePath ||
+    (location.pathname.startsWith("/admin/ops") ? "/admin/ops" : "/scheduler");
 
   const results = {};
   if (query.trim().length >= 2) {
@@ -96,7 +102,7 @@ const SearchPage = () => {
                   {items.map((item) => (
                     <div
                       key={item.id}
-                      onClick={() => navigate(item.link)}
+                      onClick={() => navigate(`${basePath}/${item.link}`)}
                       className="px-4 py-3 hover:bg-slate-700/30 cursor-pointer border-b border-slate-700/50 last:border-0 transition-colors"
                     >
                       <p className="text-white text-sm font-medium">{item.label}</p>

@@ -2,7 +2,6 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
-  Smartphone,
   Bus,
   BarChart3,
   AlertTriangle,
@@ -11,6 +10,12 @@ import {
   Settings,
   LogOut,
   AlertCircle,
+  Map,
+  CalendarDays,
+  Bell,
+  ClipboardList,
+  Search,
+  CalendarClock,
 } from 'lucide-react';
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -19,9 +24,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   const navItems = [
     { path: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/admin/users', icon: Users, label: 'Users' },
-    { path: '/admin/schedulers', icon: BarChart3, label: 'Scheduler' },
-    { path: '/admin/devices', icon: Smartphone, label: 'Devices' },
-    { path: '/admin/bus-management', icon: Bus, label: 'Bus Management' },
+    { path: '/admin/schedulers', icon: BarChart3, label: 'Scheduler accounts' },
     { path: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
     { path: '/admin/alerts', icon: AlertTriangle, label: 'Alerts' },
     { path: '/admin/incidents', icon: AlertCircle, label: 'Incidents' },
@@ -30,12 +33,21 @@ const Sidebar = ({ isOpen, onClose }) => {
     { path: '/admin/settings', icon: Settings, label: 'Settings' },
   ];
 
+  const opsItems = [
+    { path: '/admin/ops/dashboard', icon: CalendarClock, label: 'Ops dashboard' },
+    { path: '/admin/ops/buses', icon: Bus, label: 'Buses' },
+    { path: '/admin/ops/routes', icon: Map, label: 'Routes' },
+    { path: '/admin/ops/schedules', icon: CalendarDays, label: 'Schedules' },
+    { path: '/admin/ops/reports', icon: BarChart3, label: 'Ops reports' },
+    { path: '/admin/ops/notifications', icon: Bell, label: 'Notifications' },
+    { path: '/admin/ops/activity', icon: ClipboardList, label: 'Activity logs' },
+    { path: '/admin/ops/search', icon: Search, label: 'Search' },
+  ];
+
   const handleLogout = () => {
-    // Clear authentication
+    localStorage.removeItem('token');
     localStorage.removeItem('adminAuthenticated');
     localStorage.removeItem('adminEmail');
-    
-    // Redirect to login
     navigate('/admin/login');
   };
 
@@ -71,7 +83,10 @@ const Sidebar = ({ isOpen, onClose }) => {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto py-6 px-4">
+          <nav className="flex-1 overflow-y-auto py-6 px-4 pr-2 [scrollbar-width:thin] [scrollbar-color:#64748b_transparent]">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 px-4">
+              Admin
+            </p>
             <ul className="space-y-2">
               {navItems.map((item) => (
                 <li key={item.path}>
@@ -88,6 +103,29 @@ const Sidebar = ({ isOpen, onClose }) => {
                   >
                     <item.icon size={20} />
                     <span className="font-medium">{item.label}</span>
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 mt-8 px-4">
+              Operations (scheduler tools)
+            </p>
+            <ul className="space-y-2">
+              {opsItems.map((item) => (
+                <li key={item.path}>
+                  <NavLink
+                    to={item.path}
+                    onClick={onClose}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+                        isActive
+                          ? 'bg-emerald-700 text-white shadow-lg shadow-emerald-500/20'
+                          : 'text-gray-300 hover:bg-slate-700 hover:text-white'
+                      }`
+                    }
+                  >
+                    <item.icon size={20} />
+                    <span className="font-medium text-sm">{item.label}</span>
                   </NavLink>
                 </li>
               ))}

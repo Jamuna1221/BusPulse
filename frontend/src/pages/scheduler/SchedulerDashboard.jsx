@@ -82,6 +82,13 @@ const SchedulerDashboard = () => {
     () => Math.max(1, ...dashboard.tripsThisWeek.map((d) => Number(d.trips) || 0)),
     [dashboard.tripsThisWeek]
   );
+  const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const tripsSeries = useMemo(() => {
+    const counts = Object.fromEntries(
+      dashboard.tripsThisWeek.map((d) => [String(d.day), Number(d.trips) || 0])
+    );
+    return weekDays.map((day) => ({ day, trips: counts[day] ?? 0 }));
+  }, [dashboard.tripsThisWeek]);
 
   const statusColors = {
     "On Time": "text-green-400 bg-green-400/10",
@@ -114,13 +121,18 @@ const SchedulerDashboard = () => {
         <div className="lg:col-span-2 bg-slate-800 rounded-xl border border-slate-700 p-6">
           <h2 className="text-lg font-bold text-white mb-4">Trips This Week</h2>
           <div className="flex items-end gap-4 h-48">
-            {dashboard.tripsThisWeek.map((d) => (
+            {tripsSeries.map((d) => (
               <div key={d.day} className="flex-1 flex flex-col items-center gap-2">
                 <span className="text-xs text-gray-400">{d.trips}</span>
                 <div className="w-full h-28 flex items-end">
                   <div
                     className="w-full bg-green-500/80 rounded-t-lg transition-all hover:bg-green-400"
-                    style={{ height: `${((Number(d.trips) || 0) / maxTrips) * 100}%` }}
+                    style={{
+                      height: d.trips > 0
+                        ? `${Math.max(14, ((Number(d.trips) || 0) / maxTrips) * 100)}%`
+                        : "6%",
+                      opacity: d.trips > 0 ? 1 : 0.35,
+                    }}
                   ></div>
                 </div>
                 <span className="text-xs text-gray-400">{d.day}</span>
@@ -168,9 +180,7 @@ const SchedulerDashboard = () => {
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-700">
-                <th className="text-left text-xs font-medium text-gray-400 uppercase py-3 px-4">Bus</th>
                 <th className="text-left text-xs font-medium text-gray-400 uppercase py-3 px-4">Route</th>
-                <th className="text-left text-xs font-medium text-gray-400 uppercase py-3 px-4">Driver</th>
                 <th className="text-left text-xs font-medium text-gray-400 uppercase py-3 px-4">Departure</th>
                 <th className="text-left text-xs font-medium text-gray-400 uppercase py-3 px-4">Status</th>
               </tr>
@@ -178,9 +188,7 @@ const SchedulerDashboard = () => {
             <tbody>
               {dashboard.todaysTrips.map((trip) => (
                 <tr key={trip.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                  <td className="py-3 px-4 text-white font-medium text-sm">{trip.bus}</td>
                   <td className="py-3 px-4 text-gray-300 text-sm">{trip.route}</td>
-                  <td className="py-3 px-4 text-gray-300 text-sm">{trip.driver}</td>
                   <td className="py-3 px-4 text-gray-300 text-sm">{trip.departure}</td>
                   <td className="py-3 px-4">
                     <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusColors[trip.status] || "text-gray-300 bg-slate-700"}`}>

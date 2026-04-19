@@ -19,6 +19,7 @@ export default function AdminLogin() {
     try {
      const res = await adminAuthAPI.login({ email, password });
      localStorage.setItem("token", res.token);
+     localStorage.setItem("adminEmail", email);
   
       console.log("LOGIN SUCCESS", res.data);
 

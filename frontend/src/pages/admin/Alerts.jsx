@@ -1,75 +1,75 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, AlertCircle, Info, Bell, Filter, Search, CheckCircle, X } from 'lucide-react';
+import { adminIncidentAPI } from "../../config/api";
 
 const Alerts = () => {
-  const [alerts, setAlerts] = useState([
-    {
-      id: 1,
-      type: 'critical',
-      category: 'Device',
-      title: 'GPS Signal Lost - Bus 23',
-      message: 'Device DEV-001 stopped transmitting location data',
-      timestamp: '5 mins ago',
-      status: 'active',
-      busNumber: 'Bus 23',
-      deviceId: 'DEV-001',
-    },
-    {
-      id: 2,
-      type: 'warning',
-      category: 'Data',
-      title: 'High Data Usage Detected',
-      message: 'Unusual data consumption pattern detected on Route A',
-      timestamp: '15 mins ago',
-      status: 'active',
-      busNumber: 'Multiple',
-      deviceId: 'N/A',
-    },
-    {
-      id: 3,
-      type: 'critical',
-      category: 'Device',
-      title: 'Device 12: GPS Signal Lost',
-      message: 'No location updates received for the past 30 minutes',
-      timestamp: '30 mins ago',
-      status: 'active',
-      busNumber: 'Bus 12',
-      deviceId: 'DEV-003',
-    },
-    {
-      id: 4,
-      type: 'error',
-      category: 'Security',
-      title: 'Failed Login Attempt',
-      message: 'Multiple failed login attempts detected from IP: 192.168.1.45',
-      timestamp: '1 hour ago',
-      status: 'acknowledged',
-      busNumber: 'N/A',
-      deviceId: 'N/A',
-    },
-    {
-      id: 5,
-      type: 'warning',
-      category: 'System',
-      title: 'Low Battery Warning',
-      message: 'Device DEV-004 battery level at 12%',
-      timestamp: '2 hours ago',
-      status: 'resolved',
-      busNumber: 'Bus 67',
-      deviceId: 'DEV-004',
-    },
-    {
-      id: 6,
-      type: 'info',
-      category: 'System',
-      title: 'System Maintenance Scheduled',
-      message: 'Scheduled maintenance window: Tonight 2:00 AM - 4:00 AM',
-      timestamp: '3 hours ago',
-      status: 'acknowledged',
-      busNumber: 'N/A',
-      deviceId: 'N/A',
-    },
-  ]);
+  const [alerts, setAlerts] = useState([]);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [selectedAlert, setSelectedAlert] = useState(null);
+
+  const timeAgo = (iso) => {
+    const d = new Date(iso);
+    const sec = Math.max(1, Math.floor((Date.now() - d.getTime()) / 1000));
+    if (sec < 60) return `${sec}s ago`;
+    const min = Math.floor(sec / 60);
+    if (min < 60) return `${min} min ago`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return `${hr} hour${hr > 1 ? "s" : ""} ago`;
+    const day = Math.floor(hr / 24);
+    return `${day} day${day > 1 ? "s" : ""} ago`;
+  };
+
+  const loadAlerts = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const res = await adminIncidentAPI.getAlerts({ limit: 300, search, status: statusFilter });
+      const data = (res.data || []).map((a) => ({
+        id: a.id,
+        incidentId: a.incident_id,
+        type: a.severity,
+        category: a.kind === "incident" ? "Incident" : "Query",
+        title: a.title,
+        message: a.message,
+        timestamp: timeAgo(a.created_at),
+        status: a.status,
+        busNumber: a.route_no || "N/A",
+        deviceId: "N/A",
+      }));
+      setAlerts(data);
+    } catch (e) {
+      setError(e.message || "Failed to load alerts.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const t = setTimeout(loadAlerts, 250);
+    return () => clearTimeout(t);
+  }, [search, statusFilter]);
+
+  const stats = useMemo(() => {
+    const total = alerts.length;
+    const active = alerts.filter((a) => a.status === "active").length;
+    const acknowledged = alerts.filter((a) => a.status === "acknowledged").length;
+    const resolved = alerts.filter((a) => a.status === "resolved").length;
+    return { total, active, acknowledged, resolved };
+  }, [alerts]);
+
+  const acknowledge = async (alert) => {
+    if (!alert.incidentId) return;
+    await adminIncidentAPI.acknowledgeIncident(alert.incidentId);
+    loadAlerts();
+  };
+  const resolve = async (alert) => {
+    if (!alert.incidentId) return;
+    await adminIncidentAPI.resolveIncident(alert.incidentId);
+    loadAlerts();
+  };
 
   const getAlertIcon = (type) => {
     switch (type) {
@@ -165,7 +165,7 @@ const Alerts = () => {
             <p className="text-gray-400 text-sm">Total Alerts</p>
             <Bell className="text-blue-400" size={24} />
           </div>
-          <p className="text-3xl font-bold text-white">234</p>
+          <p className="text-3xl font-bold text-white">{stats.total}</p>
           <p className="text-gray-400 text-sm mt-2">Last 24 hours</p>
         </div>
 
@@ -174,7 +174,7 @@ const Alerts = () => {
             <p className="text-gray-400 text-sm">Active</p>
             <div className="w-3 h-3 bg-red-400 rounded-full animate-pulse"></div>
           </div>
-          <p className="text-3xl font-bold text-red-400">18</p>
+          <p className="text-3xl font-bold text-red-400">{stats.active}</p>
           <p className="text-gray-400 text-sm mt-2">Needs attention</p>
         </div>
 
@@ -183,7 +183,7 @@ const Alerts = () => {
             <p className="text-gray-400 text-sm">Acknowledged</p>
             <AlertTriangle className="text-orange-400" size={24} />
           </div>
-          <p className="text-3xl font-bold text-orange-400">45</p>
+          <p className="text-3xl font-bold text-orange-400">{stats.acknowledged}</p>
           <p className="text-gray-400 text-sm mt-2">In progress</p>
         </div>
 
@@ -192,7 +192,7 @@ const Alerts = () => {
             <p className="text-gray-400 text-sm">Resolved</p>
             <CheckCircle className="text-green-400" size={24} />
           </div>
-          <p className="text-3xl font-bold text-green-400">171</p>
+          <p className="text-3xl font-bold text-green-400">{stats.resolved}</p>
           <p className="text-gray-400 text-sm mt-2">Today</p>
         </div>
       </div>
@@ -205,17 +205,26 @@ const Alerts = () => {
             <input
               type="text"
               placeholder="Search alerts by title, bus number, or device..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-10 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
             />
           </div>
           <div className="flex gap-2">
-            <button className="flex items-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors">
+            <button className="flex items-center gap-2 px-6 py-3 bg-slate-700 text-white rounded-lg">
               <Filter size={20} />
-              Filter by Type
+              Status
             </button>
-            <button className="flex items-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors">
-              Category
-            </button>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white"
+            >
+              <option value="all">All</option>
+              <option value="active">Active</option>
+              <option value="acknowledged">Acknowledged</option>
+              <option value="resolved">Resolved</option>
+            </select>
           </div>
         </div>
       </div>
@@ -238,6 +247,8 @@ const Alerts = () => {
 
       {/* Alerts List */}
       <div className="space-y-3">
+        {loading && <div className="text-gray-400 text-sm">Loading alerts...</div>}
+        {!loading && error && <div className="text-red-400 text-sm">{error}</div>}
         {alerts.map((alert) => {
           const colors = getAlertColor(alert.type);
           return (
@@ -290,22 +301,25 @@ const Alerts = () => {
 
                   {/* Actions */}
                   <div className="flex gap-2 mt-4">
-                    {alert.status === 'active' && (
+                    {alert.status === 'active' && alert.incidentId && (
                       <>
-                        <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm">
+                        <button onClick={() => acknowledge(alert)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm">
                           Acknowledge
                         </button>
-                        <button className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm">
+                        <button onClick={() => resolve(alert)} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm">
                           Resolve
                         </button>
                       </>
                     )}
-                    {alert.status === 'acknowledged' && (
-                      <button className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm">
+                    {alert.status === 'acknowledged' && alert.incidentId && (
+                      <button onClick={() => resolve(alert)} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm">
                         Mark as Resolved
                       </button>
                     )}
-                    <button className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-sm">
+                    <button
+                      onClick={() => setSelectedAlert(alert)}
+                      className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-sm"
+                    >
                       View Details
                     </button>
                     {alert.status !== 'resolved' && (
@@ -320,6 +334,52 @@ const Alerts = () => {
           );
         })}
       </div>
+
+      {selectedAlert && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+          onClick={() => setSelectedAlert(null)}
+        >
+          <div
+            className="w-full max-w-2xl bg-slate-800 border border-slate-700 rounded-xl p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="text-xl font-bold text-white">{selectedAlert.title}</h3>
+                <p className="text-sm text-gray-400 mt-1">
+                  {selectedAlert.type.toUpperCase()} · {selectedAlert.category}
+                </p>
+              </div>
+              <button onClick={() => setSelectedAlert(null)} className="text-gray-400 hover:text-white">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-sm">
+              <div className="bg-slate-700/40 rounded-lg p-3 text-gray-200">{selectedAlert.message}</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="bg-slate-700/30 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs mb-1">Status</p>
+                  <p className="text-white font-medium capitalize">{selectedAlert.status}</p>
+                </div>
+                <div className="bg-slate-700/30 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs mb-1">Reported</p>
+                  <p className="text-white font-medium">{selectedAlert.timestamp}</p>
+                </div>
+                <div className="bg-slate-700/30 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs mb-1">Route/Bus</p>
+                  <p className="text-white font-medium">{selectedAlert.busNumber}</p>
+                </div>
+                <div className="bg-slate-700/30 rounded-lg p-3">
+                  <p className="text-gray-400 text-xs mb-1">Device</p>
+                  <p className="text-white font-medium">{selectedAlert.deviceId}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

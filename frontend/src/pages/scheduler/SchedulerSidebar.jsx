@@ -13,19 +13,26 @@ import {
   LogOut,
 } from "lucide-react";
 
-const SchedulerSidebar = ({ isOpen, onClose }) => {
+const SchedulerSidebar = ({
+  isOpen,
+  onClose,
+  basePath = "/scheduler",
+  panelLabel = "Scheduler",
+  profilePath,
+}) => {
   const navigate = useNavigate();
+  const prof = profilePath ?? `${basePath}/profile`;
 
   const navItems = [
-    { path: "/scheduler/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    { path: "/scheduler/buses", icon: Bus, label: "Bus Management" },
-    { path: "/scheduler/routes", icon: Map, label: "Route Management" },
-    { path: "/scheduler/schedules", icon: CalendarDays, label: "Schedules" },
-    { path: "/scheduler/reports", icon: BarChart3, label: "Reports & Analytics" },
-    { path: "/scheduler/notifications", icon: Bell, label: "Notifications" },
-    { path: "/scheduler/activity", icon: ClipboardList, label: "Activity Logs" },
-    { path: "/scheduler/search", icon: Search, label: "Search" },
-    { path: "/scheduler/profile", icon: UserCog, label: "Profile & Security" },
+    { path: `${basePath}/dashboard`, icon: LayoutDashboard, label: "Dashboard" },
+    { path: `${basePath}/buses`, icon: Bus, label: "Bus Management" },
+    { path: `${basePath}/routes`, icon: Map, label: "Route Management" },
+    { path: `${basePath}/schedules`, icon: CalendarDays, label: "Schedules" },
+    { path: `${basePath}/reports`, icon: BarChart3, label: "Reports & Analytics" },
+    { path: `${basePath}/notifications`, icon: Bell, label: "Notifications" },
+    { path: `${basePath}/activity`, icon: ClipboardList, label: "Activity Logs" },
+    { path: `${basePath}/search`, icon: Search, label: "Search" },
+    { path: prof, icon: UserCog, label: panelLabel === "Operations" ? "Admin settings" : "Profile & Security" },
   ];
 
   const handleLogout = () => {
@@ -53,7 +60,7 @@ const SchedulerSidebar = ({ isOpen, onClose }) => {
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-6 px-4">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 px-4">
-            Scheduler Panel
+            {panelLabel} Panel
           </p>
           <ul className="space-y-1">
             {navItems.map((item) => (

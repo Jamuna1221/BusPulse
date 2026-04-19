@@ -68,6 +68,56 @@ export const verifyAdminToken = (req, res, next) => {
  * Verify Scheduler Token Middleware
  * Checks if the user is authenticated and has scheduler role
  */
+/**
+ * Scheduler API access for operations tooling — also allowed for ADMIN
+ * (same endpoints as scheduler: buses, routes, services, analytics, logs, notifications).
+ */
+export const verifySchedulerOrAdmin = (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        success: false,
+        message: "No token provided. Please login.",
+      });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    if (decoded.role !== "BUS_SCHEDULER" && decoded.role !== "ADMIN") {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Scheduler or admin privileges required.",
+      });
+    }
+
+    req.user = {
+      id: decoded.id || decoded.userId,
+      email: decoded.email,
+      role: decoded.role,
+    };
+
+    next();
+  } catch (error) {
+    console.error("Scheduler/Admin auth error:", error);
+
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({
+        success: false,
+        message: "Token expired. Please login again.",
+      });
+    }
+
+    return res.status(401).json({
+      success: false,
+      message: "Authentication failed.",
+      error: error.message,
+    });
+  }
+};
+
 export const verifySchedulerToken = (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -160,5 +210,6 @@ export const verifyToken = (req, res, next) => {
 export default {
   verifyAdminToken,
   verifySchedulerToken,
+  verifySchedulerOrAdmin,
   verifyToken,
 };

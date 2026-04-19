@@ -1,5 +1,5 @@
 import express from "express";
-import { verifySchedulerToken } from "../middleware/auth.middleware.js";
+import { verifySchedulerOrAdmin } from "../middleware/auth.middleware.js";
 import {
   getAnalyticsOverview,
   getDashboardOverview,
@@ -7,7 +7,7 @@ import {
 
 const router = express.Router();
 
-router.use(verifySchedulerToken);
+router.use(verifySchedulerOrAdmin);
 router.get("/overview", getAnalyticsOverview);
 router.get("/dashboard", getDashboardOverview);
 

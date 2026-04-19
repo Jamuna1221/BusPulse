@@ -20,6 +20,11 @@ import { verifyEmail } from "./controllers/auth.controller.js";
 // Admin
 import adminUsersRoutes from "./routes/Adminusers.routes.js";
 import busSchedulerRoutes from "./routes/busScheduler.routes.js";
+import adminIncidentRoutes from "./routes/adminIncident.routes.js";
+import adminAnalyticsRoutes from "./routes/adminAnalytics.routes.js";
+import adminReportsRoutes from "./routes/adminReports.routes.js";
+import adminFeedbackRoutes from "./routes/adminFeedback.routes.js";
+import adminSettingsRoutes from "./routes/adminSettings.routes.js";
 
 // Bus (IMPORTANT: both variants handled cleanly)
 import busRoutes from "./routes/bus.routes.js";   // scheduler buses
@@ -39,6 +44,8 @@ import activityLogsRoutes from "./routes/activityLogs.routes.js";
 import { createActivityLogsTable } from "./repositories/activityLogs.repository.js";
 import { createUserDashboardTables } from "./repositories/userDashboard.repository.js";
 import { createBusFeedbackTables } from "./repositories/busFeedback.repository.js";
+import { createAdminReportsTable } from "./repositories/adminReports.repository.js";
+import { createAdminFeedbackTables } from "./repositories/adminFeedback.repository.js";
 
 // User Dashboard
 import userDashboardRoutes from "./routes/userDashboard.routes.js";
@@ -82,6 +89,18 @@ createBusFeedbackTables()
     console.error("❌ Failed to create bus feedback tables:", e.message)
   );
 
+createAdminReportsTable()
+  .then(() => console.log("✅ admin reports table ready"))
+  .catch((e) =>
+    console.error("❌ Failed to create admin reports table:", e.message)
+  );
+
+createAdminFeedbackTables()
+  .then(() => console.log("✅ admin feedback tables ready"))
+  .catch((e) =>
+    console.error("❌ Failed to create admin feedback tables:", e.message)
+  );
+
 // ================== ROUTES ==================
 
 // -------- AUTH --------
@@ -93,6 +112,11 @@ app.get("/auth/verify-email", verifyEmail);
 // -------- ADMIN --------
 app.use("/api/admin/users", adminUsersRoutes);
 app.use("/api/admin/schedulers", busSchedulerRoutes);
+app.use("/api/admin", adminIncidentRoutes);
+app.use("/api/admin/analytics", adminAnalyticsRoutes);
+app.use("/api/admin/reports", adminReportsRoutes);
+app.use("/api/admin/feedback", adminFeedbackRoutes);
+app.use("/api/admin/settings", adminSettingsRoutes);
 
 // -------- PUBLIC BUS --------
 app.use("/api/buses", busRoutesPublic); // OLD ONE (important)
